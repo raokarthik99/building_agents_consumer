@@ -1,36 +1,29 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+## Supabase Auth Setup
 
-## Getting Started
+1. Create a [Supabase project](https://supabase.com/dashboard/projects) and enable **Google** as an OAuth provider under **Authentication → Providers**.  
+   - Set the authorized redirect URL to `http://localhost:3000/auth/callback` for local development.
+2. Copy `.env.local.example` to `.env.local` and fill in your project details:
 
-First, run the development server:
+   ```bash
+   cp .env.local.example .env.local
+   ```
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+   ```
+   NEXT_PUBLIC_SUPABASE_URL="https://<your-project-ref>.supabase.co"
+   NEXT_PUBLIC_SUPABASE_ANON_KEY="<your-anon-key>"
+   ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+3. Install dependencies and start the dev server:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+   ```bash
+   npm install
+   npm run dev
+   ```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+4. Visit [http://localhost:3000](http://localhost:3000) and sign in with Google to access the Copilot workspace. A signed-in session surfaces your Google profile in the header and unlocks the chat experience.
 
-## Learn More
+## Development Notes
 
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- The `/auth/callback` route exchanges the Supabase OAuth code and persists the session cookies.
+- Signing out uses the Supabase browser client and automatically refreshes the current view.
+- The Google avatar is rendered through `next/image`, so additional domains must be added to `next.config.ts` if you enable other identity providers.
