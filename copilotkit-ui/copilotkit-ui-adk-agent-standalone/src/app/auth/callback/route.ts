@@ -1,56 +1,46 @@
-import { cookies } from "next/headers";
-import { NextResponse } from "next/server";
-
+import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 
 import { supabaseConfig } from "@/lib/supabase/config";
 
-export async function GET(request: Request) {
-  const requestUrl = new URL(request.url);
-  const code = requestUrl.searchParams.get("code");
-  const next = requestUrl.searchParams.get("next") ?? "/";
-  const error = requestUrl.searchParams.get("error");
+export const dynamic = "force-dynamic";
 
-  const redirectUrl = new URL(next, requestUrl);
+export async function GET(req: NextRequest) {
+  const url = new URL(req.url);
+  const code = url.searchParams.get("code");
+  const error = url.searchParams.get("error");
+  const next = url.searchParams.get("next") || "/";
+  const redirectTo = new URL(next, url.origin);
 
-  if (error || !code) {
-    if (error) {
-      console.error("Supabase OAuth callback error:", error);
-      redirectUrl.searchParams.set("authError", error);
-    }
-    return NextResponse.redirect(redirectUrl);
+  if (error) {
+    redirectTo.searchParams.set("authError", "signin_failed");
   }
 
-  const cookieStore = await cookies();
-  const supabase = createServerClient(supabaseConfig.url, supabaseConfig.anonKey, {
-    cookies: {
-      getAll() {
-        return cookieStore
-          .getAll()
-          .map(({ name, value }) => ({ name, value }));
-      },
-      setAll(cookiesToSet) {
-        cookiesToSet.forEach(({ name, value, options }) => {
-          cookieStore.set({ name, value, ...options });
-        });
-      },
-    },
-  });
+  const res = NextResponse.redirect(redirectTo);
 
-  const {
-    error: exchangeError,
-    data: { session },
-  } = await supabase.auth.exchangeCodeForSession(code);
+  if (code && !error) {
+    const supabase = createServerClient(supabaseConfig.url, supabaseConfig.anonKey, {
+      cookies: {
+        getAll() {
+          return req.cookies.getAll().map(({ name, value }) => ({ name, value }));
+        },
+        setAll(cookies) {
+          for (const { name, value, options } of cookies) {
+            res.cookies.set(name, value, options);
+          }
+        },
+      },
+    });
 
-  if (exchangeError || !session) {
-    if (exchangeError) {
-      console.error("Supabase session exchange failed:", exchangeError);
-      redirectUrl.searchParams.set("authError", "signin_failed");
-    } else {
-      redirectUrl.searchParams.set("authError", "session_missing");
+    try {
+      await supabase.auth.exchangeCodeForSession(code);
+    } catch {
+      // If exchange fails, bubble an error back to the app UI
+      redirectTo.searchParams.set("authError", "signin_failed");
+      return NextResponse.redirect(redirectTo);
     }
-    return NextResponse.redirect(redirectUrl);
   }
 
-  return NextResponse.redirect(redirectUrl);
+  return res;
 }
+

@@ -24,13 +24,15 @@ export function GoogleSignInButton({
       setIsLoading(true);
 
       const origin = window.location.origin;
+      const current = new URL(window.location.href);
+      const next = current.searchParams.get("next") || "/";
       const {
         data: { url },
         error: signInError,
       } = await supabase.auth.signInWithOAuth({
         provider: "google",
         options: {
-          redirectTo: `${origin}/auth/callback`,
+          redirectTo: `${origin}/auth/callback?next=${encodeURIComponent(next)}`,
           queryParams: {
             access_type: "offline",
             prompt: "select_account",

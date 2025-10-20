@@ -1,29 +1,7 @@
 import "@copilotkit/react-ui/styles.css";
 import { CopilotChat } from "@copilotkit/react-ui";
 
-import { SignInPanel } from "@/components/SignInPanel";
-import { getSupabaseServerClient } from "@/lib/supabase/server";
-
-type PageProps = {
-  searchParams?:
-    | Record<string, string | string[] | undefined>
-    | Promise<Record<string, string | string[] | undefined>>;
-};
-
-export default async function YourApp({ searchParams }: PageProps) {
-  const supabase = await getSupabaseServerClient();
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
-
-  if (!session) {
-    const resolvedSearchParams = await searchParams;
-    const authErrorParam = resolvedSearchParams?.authError;
-    const authError = Array.isArray(authErrorParam)
-      ? authErrorParam[0]
-      : authErrorParam ?? null;
-    return <SignInPanel errorMessage={authError} />;
-  }
+export default async function YourApp() {
 
   return (
     <div className="flex flex-1 flex-col px-5 py-6 md:px-8">
