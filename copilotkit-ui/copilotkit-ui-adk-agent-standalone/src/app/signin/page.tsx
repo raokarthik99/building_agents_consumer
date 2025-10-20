@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { SignInPanel } from "@/components/SignInPanel";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
+import { getValidatedUser } from "@/lib/supabase/auth";
 
 type PageProps = {
   searchParams?:
@@ -10,8 +11,8 @@ type PageProps = {
 
 export default async function SignInPage({ searchParams }: PageProps) {
   const supabase = await getSupabaseServerClient();
-  const [{ data: { user } }, resolvedSearchParams] = await Promise.all([
-    supabase.auth.getUser(),
+  const [user, resolvedSearchParams] = await Promise.all([
+    getValidatedUser(supabase),
     searchParams,
   ]);
 
@@ -29,4 +30,3 @@ export default async function SignInPage({ searchParams }: PageProps) {
 
   return <SignInPanel errorMessage={authError} />;
 }
-

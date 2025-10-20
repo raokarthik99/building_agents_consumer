@@ -5,6 +5,17 @@ export type ValidatedAuth = {
   accessToken: string | null;
 };
 
+// Returns a trusted user by contacting Supabase Auth server.
+// Does not fetch or inspect the session/token.
+export async function getValidatedUser(
+  supabase: SupabaseClient
+): Promise<User | null> {
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  return user;
+}
+
 // Validates the authenticated user via Supabase Auth and returns
 // a trusted user object and corresponding access token if available.
 // If a Bearer token is provided, it is validated with Supabase when no
@@ -38,4 +49,3 @@ export async function getValidatedUserAndToken(
 
   return { user: null, accessToken: null };
 }
-
