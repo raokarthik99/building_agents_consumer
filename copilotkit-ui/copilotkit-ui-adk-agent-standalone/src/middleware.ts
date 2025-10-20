@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 
 import { supabaseConfig } from "@/lib/supabase/config";
+import { getValidatedUserAndToken } from "@/lib/supabase/auth";
 
 export async function middleware(req: NextRequest) {
   const url = req.nextUrl;
@@ -22,29 +23,21 @@ export async function middleware(req: NextRequest) {
     },
   });
 
-  // Calling getUser here refreshes the session if needed by setting cookies on res
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const isApi = url.pathname.startsWith("/api/");
+  const authHeader = req.headers.get("authorization");
+  const bearerToken = authHeader?.startsWith("Bearer ")
+    ? authHeader.slice("Bearer ".length)
+    : undefined;
 
-  // Protect all API routes: require either cookie session user or a valid Bearer token
-  if (url.pathname.startsWith("/api/")) {
-    if (!user) {
-      const authHeader = req.headers.get("authorization");
-      const bearerToken = authHeader?.startsWith("Bearer ")
-        ? authHeader.slice("Bearer ".length)
-        : undefined;
+  // Validate cookie user; for API routes also accept/validate Bearer token
+  const { user } = await getValidatedUserAndToken(
+    supabase,
+    isApi ? bearerToken : undefined
+  );
 
-      if (bearerToken) {
-        const { data } = await supabase.auth.getUser(bearerToken);
-        if (!data.user) {
-          return new NextResponse("Unauthorized", { status: 401 });
-        }
-        return res;
-      }
-
-      return new NextResponse("Unauthorized", { status: 401 });
-    }
+  // Protect API routes: require authenticated cookie user or a valid Bearer token
+  if (isApi && !user) {
+    return new NextResponse("Unauthorized", { status: 401 });
   }
 
   // Public paths that should not trigger auth redirects
@@ -56,7 +49,7 @@ export async function middleware(req: NextRequest) {
     /\.[a-zA-Z0-9]+$/.test(url.pathname);
 
   // For all other pages, redirect to /signin if not authenticated
-  if (!url.pathname.startsWith("/api/") && !isPublic && !isStatic) {
+  if (!isApi && !isPublic && !isStatic) {
     if (!user) {
       const signinUrl = new URL("/signin", req.url);
       const next = url.pathname + (url.search || "");

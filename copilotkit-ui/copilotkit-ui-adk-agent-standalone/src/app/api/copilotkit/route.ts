@@ -6,6 +6,7 @@ import {
 import { HttpAgent } from "@ag-ui/client";
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
+import { getValidatedUserAndToken } from "@/lib/supabase/auth";
 import type { User } from "@supabase/supabase-js";
 
 export const dynamic = "force-dynamic";
@@ -23,24 +24,10 @@ export const POST = async (req: NextRequest) => {
     ? authHeader.slice("Bearer ".length)
     : undefined;
 
-  const [
-    {
-      data: { user: cookieUser },
-    },
-    {
-      data: { session: cookieSession },
-    },
-  ] = await Promise.all([supabase.auth.getUser(), supabase.auth.getSession()]);
-
-  let headerUser: User | null = null;
-  if (bearerToken && !cookieUser) {
-    const {
-      data: { user: u },
-    } = await supabase.auth.getUser(bearerToken);
-    headerUser = u;
-  }
-  const user = cookieUser ?? headerUser;
-  const accessToken = cookieSession?.access_token ?? bearerToken;
+  const { user, accessToken } = await getValidatedUserAndToken(
+    supabase,
+    bearerToken
+  );
 
   if (!user || !accessToken) {
     return new NextResponse("Unauthorized", { status: 401 });

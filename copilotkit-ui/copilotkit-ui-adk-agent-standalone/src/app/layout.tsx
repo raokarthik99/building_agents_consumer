@@ -5,6 +5,7 @@ import type { ReactNode } from "react";
 import { AppHeader } from "@/components/AppHeader";
 import { AppFooter } from "@/components/AppFooter";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
+import { getValidatedUserAndToken } from "@/lib/supabase/auth";
 
 export default async function RootLayout({
   children,
@@ -12,23 +13,14 @@ export default async function RootLayout({
   children: ReactNode;
 }) {
   const supabase = await getSupabaseServerClient();
-  // Authenticate user data by contacting Supabase Auth server
-  const [
-    {
-      data: { user },
-    },
-    {
-      data: { session },
-    },
-  ] = await Promise.all([
-    supabase.auth.getUser(),
-    supabase.auth.getSession(),
-  ]);
-  const copilotHeaders = session
-    ? { Authorization: `Bearer ${session.access_token}` }
+  // Authenticate via Supabase Auth and return a trusted user and token
+  const { user, accessToken } = await getValidatedUserAndToken(supabase);
+
+  const copilotHeaders = accessToken
+    ? { Authorization: `Bearer ${accessToken}` }
     : undefined;
-  const copilotProperties = session
-    ? { authorization: session.access_token }
+  const copilotProperties = accessToken
+    ? { authorization: accessToken }
     : undefined;
 
   return (
