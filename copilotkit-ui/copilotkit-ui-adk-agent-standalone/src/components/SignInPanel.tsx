@@ -13,7 +13,7 @@ export function SignInPanel({ errorMessage }: SignInPanelProps) {
             Sign in / Sign up
           </h1>
           <p className="text-xs text-slate-500">
-            Continue with one of the following options to enter your workspace.
+            Continue with one of the following options to enter your agent chat.
           </p>
           {errorMessage && (
             <div

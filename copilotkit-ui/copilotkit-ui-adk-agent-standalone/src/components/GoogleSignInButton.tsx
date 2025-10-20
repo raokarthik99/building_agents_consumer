@@ -58,7 +58,7 @@ export function GoogleSignInButton({
   };
 
   const buttonClasses = [
-    "relative inline-flex items-center justify-center overflow-hidden rounded-full transition focus:outline-none focus-visible:ring focus-visible:ring-slate-300 disabled:cursor-not-allowed disabled:opacity-60",
+    "relative inline-flex items-center justify-center overflow-hidden rounded-full cursor-pointer transition focus:outline-none focus-visible:ring focus-visible:ring-slate-300 disabled:cursor-not-allowed disabled:opacity-60",
     fullWidth ? "w-full" : "w-auto",
     variant === "secondary" ? "bg-transparent" : "bg-transparent",
   ].join(" ");
@@ -79,12 +79,14 @@ export function GoogleSignInButton({
             fullWidth ? "w-full justify-center" : ""
           }`}
         >
+          <span className="sr-only">Continue with Google</span>
           <Image
             src="/google-signin-light.svg"
-            alt="Continue with Google"
+            alt=""
             width={189}
             height={40}
             className={isLoading ? "opacity-70" : undefined}
+            aria-hidden="true"
             priority={false}
           />
         </span>

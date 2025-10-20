@@ -58,9 +58,9 @@ export function AppHeader({ user }: AppHeaderProps) {
         <Link
           href="/"
           className="text-sm font-semibold text-slate-900 transition hover:text-slate-600"
-          aria-label="Workspace home"
+          aria-label="Agent Chat Workspace home"
         >
-          Workspace
+          Agent Chat Workspace
         </Link>
         {user ? (
           <div className="flex flex-col items-end gap-2">
