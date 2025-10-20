@@ -1,5 +1,7 @@
 import logging
-from typing import Iterable, Optional, Sequence, Set
+from contextvars import ContextVar
+from dataclasses import dataclass
+from typing import Any, Iterable, Mapping, Optional, Sequence, Set
 
 import httpx
 from fastapi import Request, status
@@ -10,6 +12,39 @@ from starlette.responses import Response
 
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class SupabaseAuthContext:
+    user: Mapping[str, Any]
+    claims: Mapping[str, Any]
+
+
+_auth_context_var: ContextVar[Optional[SupabaseAuthContext]] = ContextVar(
+    "supabase_auth_context",
+    default=None,
+)
+
+
+def get_supabase_auth_context() -> Optional[SupabaseAuthContext]:
+    """
+    Return the current request's Supabase auth context, if any.
+    """
+    return _auth_context_var.get()
+
+
+def get_supabase_user_id() -> Optional[str]:
+    """
+    Convenience helper to extract the Supabase user id from the request auth context.
+    """
+    context = get_supabase_auth_context()
+    if context is None:
+        return None
+
+    user_id = context.user.get("id")
+    if isinstance(user_id, str) and user_id.strip():
+        return user_id
+    return None
 
 
 class SupabaseAuthMiddleware(BaseHTTPMiddleware):
@@ -88,7 +123,13 @@ class SupabaseAuthMiddleware(BaseHTTPMiddleware):
         )
         request.state.supabase_user = user_profile
         request.state.supabase_claims = payload
-        return await call_next(request)
+        context_token = _auth_context_var.set(
+            SupabaseAuthContext(user=user_profile, claims=payload)
+        )
+        try:
+            return await call_next(request)
+        finally:
+            _auth_context_var.reset(context_token)
 
     async def _validate_jwt(self, token: str) -> Optional[dict]:
         try:
