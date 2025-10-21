@@ -1,8 +1,8 @@
 import type { NextRequest } from "next/server";
 
 /**
- * Resolve the effective origin for requests, accounting for reverse proxies (Render),
- * optional environment overrides, and local development defaults.
+ * Resolve the effective origin for requests, accounting for reverse proxies (Render)
+ * and falling back to the request's own origin when no forwarding headers are present.
  */
 export function resolveRequestOrigin(req: NextRequest) {
   const forwardedProto = req.headers.get("x-forwarded-proto");
@@ -11,11 +11,6 @@ export function resolveRequestOrigin(req: NextRequest) {
 
   if (forwardedProto && forwardedHost) {
     return `${forwardedProto}://${forwardedHost}`;
-  }
-
-  const envOrigin = process.env.NEXT_PUBLIC_SITE_URL ?? process.env.SITE_URL;
-  if (envOrigin) {
-    return envOrigin;
   }
 
   if (forwardedHost) {
