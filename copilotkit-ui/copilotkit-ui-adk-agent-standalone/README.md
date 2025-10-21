@@ -9,7 +9,7 @@ A Next.js 15 application that pairs Supabase Auth with CopilotKit to provide a s
 - TypeScript-first setup using Turbopack for fast local rebuilds.
 
 ## Prerequisites
-- Node.js 18.18+ (Node 20 LTS recommended) and npm 9+.
+- Node.js 18.18+ (Node 20 LTS recommended; tested with v24.4.0) and npm 9+.
 - A Supabase project with Google OAuth credentials.
 - A running CopilotKit ADK runtime exposing an agent at `http://localhost:8000/agents/github-issues` (override the origin with `COPILOTKIT_RUNTIME_ORIGIN` if different).
 
