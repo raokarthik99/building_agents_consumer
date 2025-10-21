@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 
 import { supabaseConfig } from "@/lib/supabase/config";
+import { resolveRequestOrigin } from "@/lib/url/origin";
 
 export const dynamic = "force-dynamic";
 
@@ -10,15 +11,7 @@ export async function GET(req: NextRequest) {
   const code = url.searchParams.get("code");
   const error = url.searchParams.get("error");
   const next = url.searchParams.get("next") || "/";
-  const forwardedProto = req.headers.get("x-forwarded-proto");
-  const forwardedHost = req.headers.get("x-forwarded-host");
-  const origin =
-    (forwardedProto && forwardedHost
-      ? `${forwardedProto}://${forwardedHost}`
-      : undefined) ??
-    process.env.NEXT_PUBLIC_SITE_URL ??
-    process.env.SITE_URL ??
-    url.origin;
+  const origin = resolveRequestOrigin(req);
   const redirectTo = new URL(next, origin);
 
   if (error) {

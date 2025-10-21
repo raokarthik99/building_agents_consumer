@@ -3,9 +3,11 @@ import { createServerClient } from "@supabase/ssr";
 
 import { supabaseConfig } from "@/lib/supabase/config";
 import { getValidatedUserAndToken } from "@/lib/supabase/auth";
+import { resolveRequestOrigin } from "@/lib/url/origin";
 
 export async function middleware(req: NextRequest) {
   const url = req.nextUrl;
+  const origin = resolveRequestOrigin(req);
 
   // Prepare a response we can mutate cookies on; default to continuing the request
   const res = NextResponse.next();
@@ -51,7 +53,7 @@ export async function middleware(req: NextRequest) {
   // For all other pages, redirect to /signin if not authenticated
   if (!isApi && !isPublic && !isStatic) {
     if (!user) {
-      const signinUrl = new URL("/signin", req.url);
+      const signinUrl = new URL("/signin", origin);
       const next = url.pathname + (url.search || "");
       signinUrl.searchParams.set("next", next);
       return NextResponse.redirect(signinUrl);
