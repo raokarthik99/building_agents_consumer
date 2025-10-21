@@ -40,8 +40,7 @@ def _build_adk_agent() -> ADKAgent:
     return ADKAgent(
         adk_agent=root_agent,
         app_name=AGENT_INTERNAL_NAME,
-        session_timeout_seconds=3600,
-        use_in_memory_services=True,
+        user_id_extractor=lambda _: get_supabase_user_id(),
     )
 
 
@@ -51,7 +50,8 @@ def _resolve_mcp_config_id() -> str:
 
 def _resolve_effective_mcp_user_id(user_id_override: Optional[str]) -> str:
     if user_id_override:
-        logger.debug("Using Supabase user id from auth context for MCP session.")
+        logger.debug(
+            "Using Supabase user id from auth context for MCP session.")
         return user_id_override
 
     fallback_user_id = os.getenv(_TEST_MCP_USER_ENV)
@@ -78,40 +78,70 @@ def _get_composio_mcp_instance(user_id_override: Optional[str] = None) -> dict:
 
 
 def before_agent_callback_inject_user_specific_composio_mcp_tool_set(callback_context: CallbackContext):
-    """Inject user-specific Composio MCP toolset once per session.
-
-    Uses callback_context.session.state to gate one-time injection, and
-    callback_context.state to persist the flag via ADK event delta.
-    """
+    """Inject a user-specific Composio MCP toolset for the current invocation."""
     agent: Agent = callback_context._invocation_context.agent
 
-    # Namespace the state key to this agent/app so it doesn't clash.
-    injected_state_key = f"app:{AGENT_INTERNAL_NAME}:composio_mcp_tools_injected"
+    invocation_id = callback_context._invocation_context.invocation_id
 
-    # If already injected for this session, do nothing.
-    if callback_context.session.state.get(injected_state_key):
-        logger.debug("MCP tools already injected for this session; skipping.")
+    already_injected = any(
+        isinstance(tool, McpToolset)
+        and getattr(tool, "_composio_owner_invocation_id", None) == invocation_id
+        for tool in agent.tools
+    )
+    if already_injected:
+        logger.debug(
+            "MCP tools already injected for this invocation; skipping.")
         return None
 
     # Resolve MCP server instance and append toolset.
     request_user_id = get_supabase_user_id()
-    mcp_server_instance = _get_composio_mcp_instance(
+    composio_mcp_server_instance = _get_composio_mcp_instance(
         user_id_override=request_user_id
     )
-    tools_to_append = [
-        McpToolset(
-            connection_params=StreamableHTTPConnectionParams(
-                url=mcp_server_instance["url"],
-            ),
+    composio_mcp_toolset = McpToolset(
+        connection_params=StreamableHTTPConnectionParams(
+            url=composio_mcp_server_instance["url"],
         ),
+    )
+    setattr(composio_mcp_toolset, "_composio_owner_invocation_id", invocation_id)
+    composio_toolsets_to_append = [composio_mcp_toolset]
+
+    agent.tools = agent.tools + composio_toolsets_to_append
+
+    logger.info("Injected MCP tools for invocation.")
+
+
+async def after_agent_callback_close_composio_mcp_tool_set(callback_context: CallbackContext):
+    """Close any MCP toolsets that were injected for this invocation."""
+    agent: Agent = callback_context._invocation_context.agent
+    invocation_id = callback_context._invocation_context.invocation_id
+    toolsets_to_close = [
+        tool for tool in agent.tools
+        if isinstance(tool, McpToolset)
+        and getattr(tool, "_composio_owner_invocation_id", None) == invocation_id
     ]
 
-    agent.tools = agent.tools + tools_to_append
+    if not toolsets_to_close:
+        return None
 
-    # Persist that we've injected for this session using delta-aware state.
-    callback_context.state[injected_state_key] = True
-    logger.info(
-        "Injected MCP tools for session and set state flag '%s'", injected_state_key)
+    # Remove toolsets from the agent to avoid leaking across sessions.
+    remaining_tools = []
+    for tool in agent.tools:
+        if any(tool is toolset for toolset in toolsets_to_close):
+            continue
+        remaining_tools.append(tool)
+    agent.tools = remaining_tools
+
+    for toolset in toolsets_to_close:
+        try:
+            await toolset.close()
+        except Exception:  # pragma: no cover - defensive cleanup
+            logger.exception(
+                "Failed to close MCP toolset for invocation %s",
+                invocation_id,
+            )
+
+    logger.info("Closed MCP tools for invocation.")
 
 
 def get_root_agent() -> Agent:
@@ -124,7 +154,8 @@ def get_root_agent() -> Agent:
 If the user has not connected their account for the required tool, automatically initiate an initialize connection
 request when possible, and do not return control to the user until you have attempted that connection workflow."""
         ),
-        before_agent_callback=before_agent_callback_inject_user_specific_composio_mcp_tool_set
+        before_agent_callback=before_agent_callback_inject_user_specific_composio_mcp_tool_set,
+        after_agent_callback=after_agent_callback_close_composio_mcp_tool_set
     )
 
 
