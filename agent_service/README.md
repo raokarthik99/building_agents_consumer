@@ -37,45 +37,45 @@ agent registers its own routes dynamically at startup.
 4. **Run the API**
 
    ```bash
-   uvicorn app:app --reload
+   python app.py
    ```
 
-   The service defaults to `http://127.0.0.1:8000` with the main agent mounted under
+   The service defaults to `http://0.0.0.0:8000` with the main agent mounted under
    `/agents/<slug>`. Adjust host/port through the optional runtime variables.
 
 ## Environment Variables
 
 ### Shared infrastructure (middleware, app shell)
 
-| Variable | Required | Description | Default |
-| --- | --- | --- | --- |
-| `SUPABASE_URL` | yes | Base URL of the Supabase project used for auth. | — |
-| `SUPABASE_API_KEY` | no | Supabase anon/service role key for `/auth/v1/user`. | — |
-| `SUPABASE_JWT_SECRET` | yes | JWT secret used to validate HS256 tokens. | — |
-| `SUPABASE_JWT_AUDIENCE` | no | Comma-separated list of accepted audiences. | — |
-| `SUPABASE_JWT_ISSUER` | no | Overrides expected `iss` claim. Defaults to `${SUPABASE_URL}/auth/v1`. | derived |
-| `SUPABASE_AUTH_EXCLUDE_PATHS` | no | Comma-separated list of paths that bypass auth. | `/healthz` |
-| `SUPABASE_AUTH_HTTP_TIMEOUT` | no | Timeout (seconds) for Supabase lookups. | `3.0` |
-| `AGENT_ROUTE_PREFIX` | no | Prefix applied to all agent mounts. | `/agents` |
-| `AGENT_APP_TITLE` | no | FastAPI application title. | `Agent Gateway` |
-| `AGENT_APP_DESCRIPTION` | no | Optional FastAPI description text. | — |
-| `LOG_LEVEL` | no | Python logging level (e.g. `INFO`, `DEBUG`). | `INFO` |
-| `HOST` | no | Hostname bound by Uvicorn when running via `python app.py`. | `0.0.0.0` |
-| `PORT` | no | TCP port bound by Uvicorn. | `8000` |
-| `UVICORN_RELOAD` | no | Set to `true` to enable auto-reload in local dev. | `false` |
+| Variable                      | Required | Description                                                            | Default         |
+| ----------------------------- | -------- | ---------------------------------------------------------------------- | --------------- |
+| `SUPABASE_URL`                | yes      | Base URL of the Supabase project used for auth.                        | —               |
+| `SUPABASE_API_KEY`            | no       | Supabase anon/service role key for `/auth/v1/user`.                    | —               |
+| `SUPABASE_JWT_SECRET`         | yes      | JWT secret used to validate HS256 tokens.                              | —               |
+| `SUPABASE_JWT_AUDIENCE`       | no       | Comma-separated list of accepted audiences.                            | —               |
+| `SUPABASE_JWT_ISSUER`         | no       | Overrides expected `iss` claim. Defaults to `${SUPABASE_URL}/auth/v1`. | derived         |
+| `SUPABASE_AUTH_EXCLUDE_PATHS` | no       | Comma-separated list of paths that bypass auth.                        | `/healthz`      |
+| `SUPABASE_AUTH_HTTP_TIMEOUT`  | no       | Timeout (seconds) for Supabase lookups.                                | `3.0`           |
+| `AGENT_ROUTE_PREFIX`          | no       | Prefix applied to all agent mounts.                                    | `/agents`       |
+| `AGENT_APP_TITLE`             | no       | FastAPI application title.                                             | `Agent Gateway` |
+| `AGENT_APP_DESCRIPTION`       | no       | Optional FastAPI description text.                                     | —               |
+| `LOG_LEVEL`                   | no       | Python logging level (e.g. `INFO`, `DEBUG`).                           | `INFO`          |
+| `HOST`                        | no       | Hostname bound by Uvicorn when running via `python app.py`.            | `0.0.0.0`       |
+| `PORT`                        | no       | TCP port bound by Uvicorn.                                             | `8000`          |
+| `UVICORN_RELOAD`              | no       | Set to `true` to enable auto-reload in local dev.                      | `false`         |
 
 ### Main agent (`agents/main_agent`)
 
 All of the following are required unless noted otherwise.
 
-| Variable | Required | Description |
-| --- | --- | --- |
-| `MAIN_AGENT_ROUTE` | yes | URL slug for mounting this agent (e.g. `main`). |
-| `MAIN_AGENT_DISPLAY_NAME` | yes | Human-readable name used in logs and registry metadata. |
-| `MAIN_AGENT_INTERNAL_NAME` | yes | Internal identifier passed to the ADK agent. |
-| `COMPOSIO_API_KEY` | yes | API key used to request Composio MCP sessions. |
-| `MAIN_AGENT_CIO_MCP_CONFIG_ID` | yes | Composio MCP configuration identifier consumed during session generation. |
-| `MAIN_AGENT_CIO_MCP_TEST_USER_ID` | no | Fallback MCP user id for unauthenticated/manual testing. |
+| Variable                          | Required | Description                                                               |
+| --------------------------------- | -------- | ------------------------------------------------------------------------- |
+| `MAIN_AGENT_ROUTE`                | yes      | URL slug for mounting this agent (e.g. `main`).                           |
+| `MAIN_AGENT_DISPLAY_NAME`         | yes      | Human-readable name used in logs and registry metadata.                   |
+| `MAIN_AGENT_INTERNAL_NAME`        | yes      | Internal identifier passed to the ADK agent.                              |
+| `COMPOSIO_API_KEY`                | yes      | API key used to request Composio MCP sessions.                            |
+| `MAIN_AGENT_CIO_MCP_CONFIG_ID`    | yes      | Composio MCP configuration identifier consumed during session generation. |
+| `MAIN_AGENT_CIO_MCP_TEST_USER_ID` | no       | Fallback MCP user id for unauthenticated/manual testing.                  |
 
 ## Application Layout
 
@@ -102,4 +102,3 @@ All of the following are required unless noted otherwise.
   triggering auth.
 - If requests fail with `401`, verify Supabase credentials and that your bearer token
   is still valid.
-
