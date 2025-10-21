@@ -16,15 +16,15 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-AGENT_CONTEXT = "main_agent"
-AGENT_ROUTE = require_env("MAIN_AGENT_ROUTE", context=AGENT_CONTEXT)
+AGENT_CONTEXT = "github_issues_agent"
+AGENT_ROUTE = require_env("GITHUB_ISSUES_AGENT_ROUTE", context=AGENT_CONTEXT)
 AGENT_DISPLAY_NAME = require_env(
-    "MAIN_AGENT_DISPLAY_NAME", context=AGENT_CONTEXT)
+    "GITHUB_ISSUES_AGENT_DISPLAY_NAME", context=AGENT_CONTEXT)
 AGENT_INTERNAL_NAME = require_env(
-    "MAIN_AGENT_INTERNAL_NAME", context=AGENT_CONTEXT)
+    "GITHUB_ISSUES_AGENT_INTERNAL_NAME", context=AGENT_CONTEXT)
 
 logger = logging.getLogger(__name__)
-_TEST_MCP_USER_ENV = "MAIN_AGENT_CIO_MCP_TEST_USER_ID"
+_TEST_MCP_USER_ENV = "GITHUB_ISSUES_AGENT_CIO_MCP_TEST_USER_ID"
 
 
 def register_agent(app: FastAPI, base_path: str) -> None:
@@ -45,7 +45,7 @@ def _build_adk_agent() -> ADKAgent:
 
 
 def _resolve_mcp_config_id() -> str:
-    return require_env("MAIN_AGENT_CIO_MCP_CONFIG_ID", context=AGENT_CONTEXT)
+    return require_env("GITHUB_ISSUES_AGENT_CIO_MCP_CONFIG_ID", context=AGENT_CONTEXT)
 
 
 def _resolve_effective_mcp_user_id(user_id_override: Optional[str]) -> str:

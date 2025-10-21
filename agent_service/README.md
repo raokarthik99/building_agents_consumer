@@ -9,7 +9,7 @@ agent registers its own routes dynamically at startup.
 - FastAPI application factory (`shared.create_app`) that mounts every agent package in
   `agents/`.
 - Supabase-backed authentication via `SupabaseAuthMiddleware`.
-- ADK-based agent implementation (`agents/main_agent`) that brokers requests to Google
+- ADK-based agent implementation (`agents/github_issues_agent`) that brokers requests to Google
   ADK and Composio MCP services.
 - Health probe at `/healthz` and agent discovery metadata in `app.state.agent_registry`.
 
@@ -64,18 +64,18 @@ agent registers its own routes dynamically at startup.
 | `PORT`                        | no       | TCP port bound by Uvicorn.                                             | `8000`          |
 | `UVICORN_RELOAD`              | no       | Set to `true` to enable auto-reload in local dev.                      | `false`         |
 
-### Main agent (`agents/main_agent`)
+### Main agent (`agents/github_issues_agent`)
 
 All of the following are required unless noted otherwise.
 
-| Variable                          | Required | Description                                                               |
-| --------------------------------- | -------- | ------------------------------------------------------------------------- |
-| `MAIN_AGENT_ROUTE`                | yes      | URL slug for mounting this agent (e.g. `main`).                           |
-| `MAIN_AGENT_DISPLAY_NAME`         | yes      | Human-readable name used in logs and registry metadata.                   |
-| `MAIN_AGENT_INTERNAL_NAME`        | yes      | Internal identifier passed to the ADK agent.                              |
-| `COMPOSIO_API_KEY`                | yes      | API key used to request Composio MCP sessions.                            |
-| `MAIN_AGENT_CIO_MCP_CONFIG_ID`    | yes      | Composio MCP configuration identifier consumed during session generation. |
-| `MAIN_AGENT_CIO_MCP_TEST_USER_ID` | no       | Fallback MCP user id for unauthenticated/manual testing.                  |
+| Variable                                   | Required | Description                                                               |
+| ------------------------------------------ | -------- | ------------------------------------------------------------------------- |
+| `GITHUB_ISSUES_AGENT_ROUTE`                | yes      | URL slug for mounting this agent (e.g. `main`).                           |
+| `GITHUB_ISSUES_AGENT_DISPLAY_NAME`         | yes      | Human-readable name used in logs and registry metadata.                   |
+| `GITHUB_ISSUES_AGENT_INTERNAL_NAME`        | yes      | Internal identifier passed to the ADK agent.                              |
+| `COMPOSIO_API_KEY`                         | yes      | API key used to request Composio MCP sessions.                            |
+| `GITHUB_ISSUES_AGENT_CIO_MCP_CONFIG_ID`    | yes      | Composio MCP configuration identifier consumed during session generation. |
+| `GITHUB_ISSUES_AGENT_CIO_MCP_TEST_USER_ID` | no       | Fallback MCP user id for unauthenticated/manual testing.                  |
 
 ## Application Layout
 
