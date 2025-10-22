@@ -97,8 +97,10 @@ export function ComposioConnectionRenderer() {
           ) : null}
 
           <p className="mt-3 text-xs text-slate-500">
-            Once you&apos;re done, come back and ask the assistant to make sure
-            the connection looks good.
+            Once you&apos;re done, come back and send a new message to the agent
+            by saying something like &quot;Continue&quot;, &quot;Done&quot;, etc. to let the agent
+            know. The agent will then proceed to test the connection and
+            continue the task at hand.
           </p>
         </div>
       );

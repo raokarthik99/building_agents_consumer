@@ -1,51 +1,62 @@
 # Agent Service
 
-Agent Service is a FastAPI gateway that exposes one or more AI agents behind a common
-HTTP interface. Authentication is enforced through Supabase JWT middleware, and each
-agent registers its own routes dynamically at startup.
+Agent Service is a FastAPI gateway that mounts one or more AI agents behind a
+single authenticated HTTP surface. Shared infrastructure (auth, discovery,
+app wiring) lives in `shared/`, while individual agents provide their own ADK
+logic under `agents/`.
 
-## Highlights
+- **Gateway**: FastAPI application factory with Supabase-backed JWT enforcement.
+- **Agents**: Google ADK agents that can opt in to Composio MCP toolsets.
+- **Discovery**: Agents auto-register via `shared.agent_loader.discover_agents`.
 
-- FastAPI application factory (`shared.create_app`) that mounts every agent package in
-  `agents/`.
-- Supabase-backed authentication via `SupabaseAuthMiddleware`.
-- ADK-based agent implementation (`agents/github_issues_agent`) that brokers requests to Google
-  ADK and Composio MCP services.
-- Health probe at `/healthz` and agent discovery metadata in `app.state.agent_registry`.
+---
 
-## Quick Start
+## Architecture at a Glance
 
-1. **Create a virtual environment**
+- `app.py` – entry point that builds the FastAPI app with `shared.create_app`.
+- `shared/` – authentication middleware, environment helpers, Composio MCP
+  integration, and agent discovery.
+- `agents/` – one subpackage per agent; each exposes `register_agent(app, base_path)`.
+- `/healthz` – unauthenticated readiness probe.
+- `app.state.agent_registry` – runtime metadata describing mounted agents.
 
+---
+
+## Local Development Workflow
+
+1. **Create and activate a virtual environment**
    ```bash
    python -m venv .venv
    source .venv/bin/activate
    ```
 
 2. **Install dependencies**
-
    ```bash
    pip install --upgrade pip
    pip install -r requirements.txt
    ```
 
 3. **Configure environment**
+   - Copy `.env.example` if present or create `.env`.
+   - Populate the shared variables and agent-specific values listed below.
 
-   Create a `.env` file (loaded automatically by `python-dotenv`) that sets the shared
-   Supabase variables and the agent-specific variables listed below.
-
-4. **Run the API**
-
+4. **Run the service**
    ```bash
    python app.py
    ```
+   The API defaults to `http://0.0.0.0:8000`. Agents mount under
+   `/<AGENT_ROUTE_PREFIX>/<slug>`; inspect `app.state.agent_registry` for the
+   full listing.
 
-   The service defaults to `http://0.0.0.0:8000` with the main agent mounted under
-   `/agents/<slug>`. Adjust host/port through the optional runtime variables.
+5. **Smoke test**
+   - `curl http://localhost:8000/healthz`
+   - Hit an agent route with an authenticated request to ensure Supabase checks succeed.
 
-## Environment Variables
+---
 
-### Shared infrastructure (middleware, app shell)
+## Configuration
+
+### Shared Infrastructure
 
 | Variable                      | Required | Description                                                            | Default         |
 | ----------------------------- | -------- | ---------------------------------------------------------------------- | --------------- |
@@ -64,41 +75,58 @@ agent registers its own routes dynamically at startup.
 | `PORT`                        | no       | TCP port bound by Uvicorn.                                             | `8000`          |
 | `UVICORN_RELOAD`              | no       | Set to `true` to enable auto-reload in local dev.                      | `false`         |
 
-### Main agent (`agents/github_issues_agent`)
+### GitHub Issues Agent (`agents/github_issues_agent`)
 
-All of the following are required unless noted otherwise.
+| Variable                                    | Required | Description                                                                                   |
+| ------------------------------------------- | -------- | --------------------------------------------------------------------------------------------- |
+| `GITHUB_ISSUES_AGENT_ROUTE`                 | yes      | URL slug for mounting this agent (e.g. `github`).                                             |
+| `GITHUB_ISSUES_AGENT_DISPLAY_NAME`          | yes      | Human-readable name used in logs and agent registry metadata.                                 |
+| `GITHUB_ISSUES_AGENT_INTERNAL_NAME`         | yes      | Internal identifier passed to the ADK agent.                                                  |
+| `COMPOSIO_API_KEY`                          | yes      | API key used to request Composio MCP sessions.                                                |
+| `GITHUB_ISSUES_AGENT_CIO_MCP_CONFIG_IDS`    | yes      | Comma or whitespace separated list of Composio MCP configuration identifiers for this agent. |
+| `GITHUB_ISSUES_AGENT_CIO_MCP_TEST_USER_ID`  | no       | Fallback MCP user id for unauthenticated/manual testing.                                      |
 
-| Variable                                   | Required | Description                                                               |
-| ------------------------------------------ | -------- | ------------------------------------------------------------------------- |
-| `GITHUB_ISSUES_AGENT_ROUTE`                | yes      | URL slug for mounting this agent (e.g. `main`).                           |
-| `GITHUB_ISSUES_AGENT_DISPLAY_NAME`         | yes      | Human-readable name used in logs and registry metadata.                   |
-| `GITHUB_ISSUES_AGENT_INTERNAL_NAME`        | yes      | Internal identifier passed to the ADK agent.                              |
-| `COMPOSIO_API_KEY`                         | yes      | API key used to request Composio MCP sessions.                            |
-| `GITHUB_ISSUES_AGENT_CIO_MCP_CONFIG_ID`    | yes      | Composio MCP configuration identifier consumed during session generation. |
-| `GITHUB_ISSUES_AGENT_CIO_MCP_TEST_USER_ID` | no       | Fallback MCP user id for unauthenticated/manual testing.                  |
+#### Sample `.env` excerpt
+```dotenv
+SUPABASE_URL=https://example.supabase.co
+SUPABASE_JWT_SECRET=local_dev_secret
+GITHUB_ISSUES_AGENT_ROUTE=github
+GITHUB_ISSUES_AGENT_DISPLAY_NAME="GitHub Issues Copilot"
+GITHUB_ISSUES_AGENT_INTERNAL_NAME=github_issues_agent
+COMPOSIO_API_KEY=sk-...
+GITHUB_ISSUES_AGENT_CIO_MCP_CONFIG_IDS=config-primary, config-backup
+```
 
-## Application Layout
+---
 
-- `app.py` &mdash; Entry point that constructs the FastAPI app using `shared.create_app`.
-- `shared/` &mdash; Shared utilities: authentication middleware, settings loading, and
-  agent discovery logic.
-- `agents/` &mdash; Container for individual agent implementations. Each subfolder must
-  expose an `agent.py` with a `register_agent(app, base_path)` function.
-
-## Adding an Agent
+## Adding or Extending Agents
 
 1. Create a directory under `agents/` (e.g. `agents/support_bot`).
-2. Implement `agent.py` that defines:
-   - `register_agent(app: FastAPI, base_path: str)` to attach routes.
-   - Optional constants `AGENT_SLUG` / `AGENT_ROUTE` and `AGENT_DISPLAY_NAME`.
-3. Provide any agent-specific environment variables inside your `.env`.
-4. Restart the service; the new agent is discovered automatically and mounted beneath
-   `/<AGENT_ROUTE_PREFIX>/<slug>`.
+2. Implement `agent.py` with a top-level `register_agent(app: FastAPI, base_path: str)` function.
+3. Export and configure any required environment variables.
+4. Restart the service; `shared.agent_loader.discover_agents` will mount the new agent automatically.
 
-## Troubleshooting
+Agents can opt into Composio MCP tooling by instantiating `ComposioMCPIntegration`
+with their own settings and wiring the provided callbacks into the ADK agent.
 
-- Use `LOG_LEVEL=DEBUG` to surface Supabase authentication traces.
-- `curl http://localhost:8000/healthz` to confirm the service is running without
-  triggering auth.
-- If requests fail with `401`, verify Supabase credentials and that your bearer token
-  is still valid.
+---
+
+## Composio MCP Integration
+
+- Configure a single env var (e.g. `GITHUB_ISSUES_AGENT_CIO_MCP_CONFIG_IDS`) with
+  one or more MCP config IDs separated by commas or whitespace.
+- The integration generates a dedicated `McpToolset` per config ID at invocation time
+  and tears them down after completion.
+- Each toolset is tagged with the invoking ADK invocation id to avoid cross-request leaks.
+
+---
+
+## Operational Tips
+
+- **Health check**: `curl http://localhost:8000/healthz`
+- **Enable verbose logging**: set `LOG_LEVEL=DEBUG`.
+- **Auth failures**: verify Supabase credentials, ensure your bearer token is valid, and confirm the Supabase user exists.
+- **Reload during development**: run `UVICORN_RELOAD=true python app.py`.
+
+Agent registry metadata (`app.state.agent_registry`) is useful for introspecting
+mounted agents at runtime. Use it to surface available slugs or build discovery endpoints.
