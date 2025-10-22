@@ -1,4 +1,5 @@
 import logging
+import os
 
 from ag_ui_adk import ADKAgent, add_adk_fastapi_endpoint
 from dotenv import load_dotenv
@@ -9,7 +10,7 @@ from google.adk.models.lite_llm import LiteLlm
 
 from shared.auth import get_supabase_user_id
 from shared.composio_mcp import ComposioMCPIntegration, ComposioMCPSettings
-from shared.env import require_env
+from shared.env import require_env, require_env_with_fallback
 
 load_dotenv()
 
@@ -23,6 +24,10 @@ AGENT_INTERNAL_NAME = require_env(
 logger = logging.getLogger(__name__)
 _MCP_CONFIG_IDS_ENV = "GITHUB_ISSUES_AGENT_CIO_MCP_CONFIG_IDS"
 _TEST_MCP_USER_ENV = "GITHUB_ISSUES_AGENT_CIO_MCP_TEST_USER_ID"
+_MODEL_PROVIDER_ENV = "GITHUB_ISSUES_AGENT_MODEL_PROVIDER"
+_MODEL_IDENTIFIER_ENV = "GITHUB_ISSUES_AGENT_MODEL"
+_DEFAULT_MODEL_PROVIDER_ENV = "DEFAULT_MODEL_PROVIDER"
+_DEFAULT_MODEL_ENV = "DEFAULT_MODEL"
 
 composio_integration = ComposioMCPIntegration(
     ComposioMCPSettings(
@@ -37,6 +42,32 @@ AGENT_INSTRUCTION = (
     "You are a GitHub issues specialist. Handle issue triage, creation, updates, and summaries."
     f"\n\n{composio_integration.connection_instruction}"
 )
+_MODEL_IDENTIFIER = require_env_with_fallback(
+    _MODEL_IDENTIFIER_ENV,
+    _DEFAULT_MODEL_ENV,
+    context=AGENT_CONTEXT,
+)
+
+
+def _resolve_model_provider() -> str:
+    provider = os.getenv(_MODEL_PROVIDER_ENV)
+    if provider:
+        trimmed = provider.strip()
+        if trimmed:
+            return trimmed.upper()
+    default_provider = os.getenv(_DEFAULT_MODEL_PROVIDER_ENV)
+    if default_provider:
+        trimmed = default_provider.strip()
+        if trimmed:
+            return trimmed.upper()
+    return "LITELLM"
+
+
+def _resolve_model():
+    provider = _resolve_model_provider()
+    if provider == "GOOGLE":
+        return _MODEL_IDENTIFIER
+    return LiteLlm(model=_MODEL_IDENTIFIER)
 
 
 def register_agent(app: FastAPI, base_path: str) -> None:
@@ -59,7 +90,7 @@ def _build_adk_agent() -> ADKAgent:
 def get_root_agent() -> Agent:
     return Agent(
         name=AGENT_INTERNAL_NAME,
-        model=LiteLlm(model="anthropic/claude-haiku-4-5-20251001"),
+        model=_resolve_model(),
         description="Agent specialized in managing GitHub issues workflows.",
         instruction=AGENT_INSTRUCTION,
         before_agent_callback=composio_integration.before_agent_callback,

@@ -16,6 +16,30 @@ def require_env(var_name: str, *, context: str) -> str:
     )
 
 
+def require_env_with_fallback(
+    primary_var: str,
+    fallback_var: str,
+    *,
+    context: str,
+) -> str:
+    """
+    Resolve an environment variable, falling back to a shared default if provided.
+    """
+
+    primary_value = os.getenv(primary_var)
+    if primary_value:
+        return primary_value
+
+    fallback_value = os.getenv(fallback_var)
+    if fallback_value:
+        return fallback_value
+
+    raise RuntimeError(
+        f"Environment variable '{primary_var}' must be set to initialize {context}. "
+        f"You may also set '{fallback_var}' as a shared default."
+    )
+
+
 def resolve_required_pair(
     first_var: str,
     second_var: str,
@@ -40,6 +64,14 @@ class EnvVarSpec:
 
 
 SHARED_ENVIRONMENT_VARIABLES: Tuple[EnvVarSpec, ...] = (
+    EnvVarSpec(
+        name="DEFAULT_MODEL_PROVIDER",
+        description="Fallback model provider (e.g. GOOGLE or LITELLM) used by agents without overrides.",
+    ),
+    EnvVarSpec(
+        name="DEFAULT_MODEL",
+        description="Fallback model identifier shared across agents.",
+    ),
     EnvVarSpec(
         name="SUPABASE_URL",
         description="Base URL of the Supabase project used for authentication.",
