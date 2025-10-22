@@ -26,6 +26,13 @@ export function ChatClient() {
                 "List top commented open github issues in microsoft/agent-framework",
             },
           ]}
+          // Leaving feedback related actions/buttons as undefined to avoid showing these to the user as we don't have the feedback system hooked up yet.
+          icons={{
+            thumbsDownIcon: undefined,
+            thumbsUpIcon: undefined,
+          }}
+          onThumbsDown={undefined}
+          onThumbsUp={undefined}
         />
       </div>
     </div>
