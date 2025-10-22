@@ -4,6 +4,8 @@ from ag_ui_adk import ADKAgent, add_adk_fastapi_endpoint
 from dotenv import load_dotenv
 from fastapi import FastAPI
 from google.adk.agents import Agent
+from google.adk.models.lite_llm import LiteLlm
+
 
 from shared.auth import get_supabase_user_id
 from shared.composio_mcp import ComposioMCPIntegration, ComposioMCPSettings
@@ -31,6 +33,11 @@ composio_integration = ComposioMCPIntegration(
     )
 )
 
+AGENT_INSTRUCTION = (
+    "You are a GitHub issues specialist. Handle issue triage, creation, updates, and summaries."
+    f"\n\n{composio_integration.connection_instruction}"
+)
+
 
 def register_agent(app: FastAPI, base_path: str) -> None:
     """
@@ -52,13 +59,9 @@ def _build_adk_agent() -> ADKAgent:
 def get_root_agent() -> Agent:
     return Agent(
         name=AGENT_INTERNAL_NAME,
-        model="gemini-2.5-flash",
+        model=LiteLlm(model="anthropic/claude-haiku-4-5-20251001"),
         description="Agent specialized in managing GitHub issues workflows.",
-        instruction=(
-            """You are a GitHub issues specialist. Handle issue triage, creation, updates, and summaries.
-If the user has not connected their account for the required tool, automatically initiate an initialize connection
-request when possible, and do not return control to the user until you have attempted that connection workflow."""
-        ),
+        instruction=AGENT_INSTRUCTION,
         before_agent_callback=composio_integration.before_agent_callback,
         after_agent_callback=composio_integration.after_agent_callback,
         after_tool_callback=composio_integration.normalize_initiate_connection_response,

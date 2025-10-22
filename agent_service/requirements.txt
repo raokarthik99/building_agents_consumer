@@ -8,3 +8,4 @@ ag-ui-adk
 composio
 httpx
 PyJWT
+litellm

@@ -25,28 +25,39 @@ logic under `agents/`.
 ## Local Development Workflow
 
 1. **Create and activate a virtual environment**
+
    ```bash
    python -m venv .venv
    source .venv/bin/activate
    ```
 
 2. **Install dependencies**
+
    ```bash
    pip install --upgrade pip
    pip install -r requirements.txt
    ```
 
 3. **Configure environment**
+
    - Copy `.env.example` if present or create `.env`.
    - Populate the shared variables and agent-specific values listed below.
 
-4. **Run the service**
+4. **Run the service** (or explore via ADK Web)
+
    ```bash
    python app.py
    ```
+
    The API defaults to `http://0.0.0.0:8000`. Agents mount under
    `/<AGENT_ROUTE_PREFIX>/<slug>`; inspect `app.state.agent_registry` for the
    full listing.
+
+   To exercise an agent in Google's official ADK playground, first `cd` into the
+   agent directory (for example `cd agents/github_issues_agent`) and launch
+   `adk web`. Supabase authentication is bypassed in this playground, so reserve
+   it for local/manual validation. For production frontends and deployment,
+   continue using the CopilotKit ADK wrapper exposed through `app.py`.
 
 5. **Smoke test**
    - `curl http://localhost:8000/healthz`
@@ -58,42 +69,49 @@ logic under `agents/`.
 
 ### Shared Infrastructure
 
-| Variable                      | Required | Description                                                            | Default         |
-| ----------------------------- | -------- | ---------------------------------------------------------------------- | --------------- |
-| `SUPABASE_URL`                | yes      | Base URL of the Supabase project used for auth.                        | —               |
-| `SUPABASE_API_KEY`            | no       | Supabase anon/service role key for `/auth/v1/user`.                    | —               |
-| `SUPABASE_JWT_SECRET`         | yes      | JWT secret used to validate HS256 tokens.                              | —               |
-| `SUPABASE_JWT_AUDIENCE`       | no       | Comma-separated list of accepted audiences.                            | —               |
-| `SUPABASE_JWT_ISSUER`         | no       | Overrides expected `iss` claim. Defaults to `${SUPABASE_URL}/auth/v1`. | derived         |
-| `SUPABASE_AUTH_EXCLUDE_PATHS` | no       | Comma-separated list of paths that bypass auth.                        | `/healthz`      |
-| `SUPABASE_AUTH_HTTP_TIMEOUT`  | no       | Timeout (seconds) for Supabase lookups.                                | `3.0`           |
-| `AGENT_ROUTE_PREFIX`          | no       | Prefix applied to all agent mounts.                                    | `/agents`       |
-| `AGENT_APP_TITLE`             | no       | FastAPI application title.                                             | `Agent Gateway` |
-| `AGENT_APP_DESCRIPTION`       | no       | Optional FastAPI description text.                                     | —               |
-| `LOG_LEVEL`                   | no       | Python logging level (e.g. `INFO`, `DEBUG`).                           | `INFO`          |
-| `HOST`                        | no       | Hostname bound by Uvicorn when running via `python app.py`.            | `0.0.0.0`       |
-| `PORT`                        | no       | TCP port bound by Uvicorn.                                             | `8000`          |
-| `UVICORN_RELOAD`              | no       | Set to `true` to enable auto-reload in local dev.                      | `false`         |
+| Variable                      | Required | Description                                                             | Default         |
+| ----------------------------- | -------- | ----------------------------------------------------------------------- | --------------- |
+| `SUPABASE_URL`                | yes      | Base URL of the Supabase project used for auth.                         | —               |
+| `SUPABASE_API_KEY`            | no       | Supabase anon/service role key for `/auth/v1/user`.                     | —               |
+| `SUPABASE_JWT_SECRET`         | yes      | JWT secret used to validate HS256 tokens.                               | —               |
+| `SUPABASE_JWT_AUDIENCE`       | no       | Comma-separated list of accepted audiences.                             | —               |
+| `SUPABASE_JWT_ISSUER`         | no       | Overrides expected `iss` claim. Defaults to `${SUPABASE_URL}/auth/v1`.  | derived         |
+| `SUPABASE_AUTH_EXCLUDE_PATHS` | no       | Comma-separated list of paths that bypass auth.                         | `/healthz`      |
+| `SUPABASE_AUTH_HTTP_TIMEOUT`  | no       | Timeout (seconds) for Supabase lookups.                                 | `3.0`           |
+| `GOOGLE_GENAI_USE_VERTEXAI`   | no       | Set to `true` to route Google Generative AI requests through Vertex AI. | `false`         |
+| `GOOGLE_API_KEY`              | yes      | Google Generative AI API key used by shared tooling.                    | —               |
+| `ANTHROPIC_API_KEY`           | no       | Anthropic API key for Claude-powered helpers.                           | —               |
+| `COMPOSIO_API_KEY`            | yes      | API key used to request Composio MCP sessions.                          | —               |
+| `AGENT_ROUTE_PREFIX`          | no       | Prefix applied to all agent mounts.                                     | `/agents`       |
+| `AGENT_APP_TITLE`             | no       | FastAPI application title.                                              | `Agent Gateway` |
+| `AGENT_APP_DESCRIPTION`       | no       | Optional FastAPI description text.                                      | —               |
+| `LOG_LEVEL`                   | no       | Python logging level (e.g. `INFO`, `DEBUG`).                            | `INFO`          |
+| `HOST`                        | no       | Hostname bound by Uvicorn when running via `python app.py`.             | `0.0.0.0`       |
+| `PORT`                        | no       | TCP port bound by Uvicorn.                                              | `8000`          |
+| `UVICORN_RELOAD`              | no       | Set to `true` to enable auto-reload in local dev.                       | `false`         |
 
 ### GitHub Issues Agent (`agents/github_issues_agent`)
 
-| Variable                                    | Required | Description                                                                                   |
-| ------------------------------------------- | -------- | --------------------------------------------------------------------------------------------- |
-| `GITHUB_ISSUES_AGENT_ROUTE`                 | yes      | URL slug for mounting this agent (e.g. `github`).                                             |
-| `GITHUB_ISSUES_AGENT_DISPLAY_NAME`          | yes      | Human-readable name used in logs and agent registry metadata.                                 |
-| `GITHUB_ISSUES_AGENT_INTERNAL_NAME`         | yes      | Internal identifier passed to the ADK agent.                                                  |
-| `COMPOSIO_API_KEY`                          | yes      | API key used to request Composio MCP sessions.                                                |
-| `GITHUB_ISSUES_AGENT_CIO_MCP_CONFIG_IDS`    | yes      | Comma or whitespace separated list of Composio MCP configuration identifiers for this agent. |
-| `GITHUB_ISSUES_AGENT_CIO_MCP_TEST_USER_ID`  | no       | Fallback MCP user id for unauthenticated/manual testing.                                      |
+| Variable                                   | Required | Description                                                                                  |
+| ------------------------------------------ | -------- | -------------------------------------------------------------------------------------------- |
+| `GITHUB_ISSUES_AGENT_ROUTE`                | yes      | URL slug for mounting this agent (e.g. `github`).                                            |
+| `GITHUB_ISSUES_AGENT_DISPLAY_NAME`         | yes      | Human-readable name used in logs and agent registry metadata.                                |
+| `GITHUB_ISSUES_AGENT_INTERNAL_NAME`        | yes      | Internal identifier passed to the ADK agent.                                                 |
+| `GITHUB_ISSUES_AGENT_CIO_MCP_CONFIG_IDS`   | yes      | Comma or whitespace separated list of Composio MCP configuration identifiers for this agent. |
+| `GITHUB_ISSUES_AGENT_CIO_MCP_TEST_USER_ID` | no       | Fallback MCP user id for unauthenticated/manual testing.                                     |
 
 #### Sample `.env` excerpt
+
 ```dotenv
 SUPABASE_URL=https://example.supabase.co
 SUPABASE_JWT_SECRET=local_dev_secret
+GOOGLE_GENAI_USE_VERTEXAI=false
+GOOGLE_API_KEY=ya29...
+ANTHROPIC_API_KEY=sk-ant-...
+COMPOSIO_API_KEY=sk-...
 GITHUB_ISSUES_AGENT_ROUTE=github
 GITHUB_ISSUES_AGENT_DISPLAY_NAME="GitHub Issues Copilot"
 GITHUB_ISSUES_AGENT_INTERNAL_NAME=github_issues_agent
-COMPOSIO_API_KEY=sk-...
 GITHUB_ISSUES_AGENT_CIO_MCP_CONFIG_IDS=config-primary, config-backup
 ```
 

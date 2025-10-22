@@ -41,6 +41,21 @@ class ComposioMCPSettings:
     initiate_connection_tool_name: str = "COMPOSIO_INITIATE_CONNECTION"
 
 
+def composio_connection_instruction(initiate_connection_tool_name: str) -> str:
+    """
+    Provide the canonical instruction block for handling missing Composio connections.
+    """
+    return (
+        "Composio connection protocol:\n"
+        "1. Call the required Composio business tool directly; do not run 'COMPOSIO_CHECK_ACTIVE_CONNECTION' beforehand.\n"
+        f"2. If the business tool reports the user is not connected, immediately call '{initiate_connection_tool_name}' to launch the connection flow.\n"
+        "3. Tell the user you have initiated the request and that they must finish linking before you can proceed.\n"
+        "4. Wait for confirmation that the connection succeeded, then resume the original task and retry the original Composio tool.\n"
+        "5. Format any connection links you share as markdown links like [title](url) rather than exposing raw URLs.\n"
+        "Do not ignore missing connections or attempt further Composio calls until the link is established."
+    )
+
+
 class ComposioMCPIntegration:
     """
     Reusable Composio MCP lifecycle hooks that can be attached to any agent.
@@ -50,7 +65,8 @@ class ComposioMCPIntegration:
         self,
         settings: ComposioMCPSettings,
         *,
-        user_id_resolver: Callable[[], Optional[str]] = _default_user_id_resolver,
+        user_id_resolver: Callable[[], Optional[str]
+                                   ] = _default_user_id_resolver,
     ) -> None:
         self._settings = settings
         self._user_id_resolver = user_id_resolver
@@ -60,6 +76,15 @@ class ComposioMCPIntegration:
                 "ComposioMCPSettings.mcp_config_ids_env must be a non-empty environment variable name"
             )
         self._config_ids_env = config_ids_env
+
+    @property
+    def connection_instruction(self) -> str:
+        """
+        Canonical prompt fragment describing how to handle missing Composio connections.
+        """
+        return composio_connection_instruction(
+            self._settings.initiate_connection_tool_name
+        )
 
     def before_agent_callback(self, callback_context: CallbackContext) -> None:
         agent = callback_context._invocation_context.agent
@@ -272,7 +297,8 @@ class ComposioMCPIntegration:
         try:
             parsed = json.loads(serialized)
         except json.JSONDecodeError:
-            logger.debug("Failed to parse JSON payload from tool response text")
+            logger.debug(
+                "Failed to parse JSON payload from tool response text")
             return None
         return parsed if isinstance(parsed, dict) else None
 
@@ -296,4 +322,8 @@ class ComposioMCPIntegration:
             yield f"{self._config_ids_env}[{index}]", config_id
 
 
-__all__ = ["ComposioMCPIntegration", "ComposioMCPSettings"]
+__all__ = [
+    "ComposioMCPIntegration",
+    "ComposioMCPSettings",
+    "composio_connection_instruction",
+]
