@@ -1,14 +1,17 @@
+import json
 import logging
 import os
-from typing import Optional
+from typing import Any, Dict, Optional
 
 from ag_ui_adk import ADKAgent, add_adk_fastapi_endpoint
 from composio import Composio
 from fastapi import FastAPI
 from google.adk.agents import Agent
 from google.adk.agents.callback_context import CallbackContext
+from google.adk.tools.base_tool import BaseTool
 from google.adk.tools.mcp_tool.mcp_session_manager import StreamableHTTPConnectionParams
 from google.adk.tools.mcp_tool.mcp_toolset import McpToolset
+from google.adk.tools.tool_context import ToolContext
 
 from shared.auth import get_supabase_user_id
 from shared.env import require_env
@@ -25,6 +28,7 @@ AGENT_INTERNAL_NAME = require_env(
 
 logger = logging.getLogger(__name__)
 _TEST_MCP_USER_ENV = "GITHUB_ISSUES_AGENT_CIO_MCP_TEST_USER_ID"
+_COMPOSIO_INITIATE_CONNECTION_TOOL = "COMPOSIO_INITIATE_CONNECTION"
 
 
 def register_agent(app: FastAPI, base_path: str) -> None:
@@ -144,6 +148,76 @@ async def after_agent_callback_close_composio_mcp_tool_set(callback_context: Cal
     logger.info("Closed MCP tools for invocation.")
 
 
+def _normalize_composio_initiate_connection_response(
+    tool: BaseTool,
+    args: Dict[str, Any],
+    tool_context: ToolContext,
+    tool_response: Any,
+) -> Optional[Dict[str, Any]]:
+    """Flatten Composio initiate connection tool responses into standard JSON."""
+    if tool.name != _COMPOSIO_INITIATE_CONNECTION_TOOL or tool_response is None:
+        return None
+
+    payload = _extract_structured_payload(tool_response)
+    if payload is None:
+        logger.warning(
+            "Unable to normalize response from %s tool; leaving response untouched",
+            _COMPOSIO_INITIATE_CONNECTION_TOOL,
+        )
+        return None
+
+    return payload
+
+
+def _extract_structured_payload(raw_response: Any) -> Optional[Dict[str, Any]]:
+    """Extract an easy-to-serialize dict from MCP CallToolResult payloads."""
+    response_candidate = raw_response
+
+    if isinstance(raw_response, dict):
+        candidate_from_result = raw_response.get("result")
+        if isinstance(candidate_from_result, dict):
+            return candidate_from_result
+        if candidate_from_result is not None:
+            response_candidate = candidate_from_result
+        else:
+            # If the dict already looks like the final payload, return it
+            return raw_response
+
+    try:
+        from mcp.types import CallToolResult, TextContent
+    except Exception:  # pragma: no cover - MCP library always available in runtime
+        CallToolResult = None  # type: ignore[assignment]
+        TextContent = None  # type: ignore[assignment]
+
+    if CallToolResult and isinstance(response_candidate, CallToolResult):
+        if response_candidate.structuredContent:
+            structured = response_candidate.structuredContent
+            if isinstance(structured, dict):
+                return structured
+
+        for block in response_candidate.content:
+            text_value = getattr(block, "text", None)
+            if text_value:
+                parsed = _try_parse_json(text_value)
+                if parsed is not None:
+                    return parsed
+        return None
+
+    if isinstance(response_candidate, str):
+        return _try_parse_json(response_candidate)
+
+    return None
+
+
+def _try_parse_json(serialized: str) -> Optional[Dict[str, Any]]:
+    try:
+        parsed = json.loads(serialized)
+    except json.JSONDecodeError:
+        logger.debug("Failed to parse JSON payload from tool response text")
+        return None
+    return parsed if isinstance(parsed, dict) else None
+
+
 def get_root_agent() -> Agent:
     return Agent(
         name=AGENT_INTERNAL_NAME,
@@ -155,7 +229,8 @@ If the user has not connected their account for the required tool, automatically
 request when possible, and do not return control to the user until you have attempted that connection workflow."""
         ),
         before_agent_callback=before_agent_callback_inject_user_specific_composio_mcp_tool_set,
-        after_agent_callback=after_agent_callback_close_composio_mcp_tool_set
+        after_agent_callback=after_agent_callback_close_composio_mcp_tool_set,
+        after_tool_callback=_normalize_composio_initiate_connection_response,
     )
 
 
