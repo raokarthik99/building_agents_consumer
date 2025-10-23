@@ -23,7 +23,7 @@ export function ChatClient() {
             {
               title: "Top trending github issues",
               message:
-                "List top commented open github issues in microsoft/agent-framework",
+                "List top commented open github issues in google/adk-python",
             },
           ]}
           // Leaving feedback related actions/buttons as undefined to avoid showing these to the user as we don't have the feedback system hooked up yet.

@@ -24,6 +24,12 @@ logic under `agents/`.
 
 ## Local Development Workflow
 
+1. **Match the Python runtime**
+
+   The repository pins `3.13.1` in `.python-version`. If you use `pyenv`,
+   run `pyenv install 3.13.1` (once) so `python` resolves to the correct interpreter.
+   Otherwise make sure `python --version` reports `3.13.1` before continuing.
+
 1. **Create and activate a virtual environment**
 
    ```bash
@@ -31,20 +37,50 @@ logic under `agents/`.
    source .venv/bin/activate
    ```
 
-2. **Install dependencies**
+1. **Install dependencies**
+
+   ```bash
+   pip install --upgrade pip
+   pip install -r requirements.lock
+   ```
+
+   `requirements.txt` keeps the high-level dependency list. When you add or
+   upgrade packages, reinstall from `requirements.txt`, then regenerate the lock:
+
+   ```bash
+   pip install -r requirements.txt
+   pip freeze --exclude-editable > requirements.lock
+   ```
+
+### Updating dependencies
+
+1. Activate a clean virtual environment for this project (`source .venv/bin/activate`). If you need a fresh start, remove and recreate `.venv` before proceeding.
+1. Edit `requirements.txt` with the new or updated packages you want to add. Remove entries you no longer need.
+1. Install the resolved set to make sure the environment matches the spec:
 
    ```bash
    pip install --upgrade pip
    pip install -r requirements.txt
    ```
 
-3. **Configure environment**
+   If you removed packages, uninstall them (`pip uninstall <package>`) or rebuild the virtualenv so they do not linger.
+
+1. Regenerate the lockfile from the now-canonical environment:
+
+   ```bash
+   pip freeze --exclude-editable > requirements.lock
+   ```
+
+1. Run your usual test smoke (for example `python app.py` plus the `/healthz` check below) to confirm nothing regressed.
+1. Commit `requirements.txt` and `requirements.lock` together so reviewers can see the intended upgrade.
+
+1. **Configure environment**
 
    - Copy `cp .env.example .env` and populate the shared variables with project-specific secrets. This file is git-ignored—keep it private.
    - For each agent, copy its example (`cp agents/github_issues_agent/.env.example agents/github_issues_agent/.env`) and tailor the overrides as needed.
      > **Security:** Keep only the `.example` templates in source control. Never commit populated `.env*` files—they typically contain credentials.
 
-4. **Run the service** (or explore via ADK Web)
+1. **Run the service** (or explore via ADK Web)
 
    - From the project root (`agent_service/`), start the FastAPI gateway:
 
@@ -68,7 +104,7 @@ logic under `agents/`.
      local/manual validation. For production frontends and deployment, continue
      using the CopilotKit ADK wrapper exposed through `app.py`.
 
-5. **Smoke test**
+1. **Smoke test**
    - `curl http://localhost:8000/healthz`
    - Hit an agent route with an authenticated request to ensure Supabase checks succeed.
 
