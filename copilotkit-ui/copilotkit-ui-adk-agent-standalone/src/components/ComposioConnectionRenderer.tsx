@@ -364,7 +364,7 @@ export function ComposioConnectionContent(props: ComposioRenderProps) {
       setConnectedAccount(null);
       setOverrideStatus("INACTIVE");
       setSuccessMessage(
-        "This connection has been disconnected. Ask the agent to initiate a new connection if you need access again."
+        "This connection has been disconnected. Ask me to initiate a new connection if you need access again."
       );
       setIsDeleted(true);
       setHasLaunchedAuth(false);
@@ -393,7 +393,7 @@ export function ComposioConnectionContent(props: ComposioRenderProps) {
   const handlePrimaryAction = useCallback(() => {
     if (isDeleted) {
       setWaitError(
-        "This connection has been disconnected. Ask the agent to initiate a new connection to continue."
+        "This connection has been disconnected. Ask me to initiate a new connection to continue."
       );
       return;
     }
@@ -479,20 +479,20 @@ export function ComposioConnectionContent(props: ComposioRenderProps) {
 
   if (showActiveInstructions) {
     instructionMessage =
-      'Everything looks connected. If the integration stops responding, click "Refresh connection" to check the latest status.';
+      'Everything looks connected. If the integration stops responding, click "Refresh connection" to check the latest status. When you return to the chat, send me a quick message like "Continue" so I resume the original task.';
   } else if (showAuthInstructions) {
     if (isWaiting) {
       instructionMessage =
         "We're verifying the connection. If you've already finished authorizing, this usually takes just a moment.";
     } else if (waitError) {
       instructionMessage =
-        'We could not confirm the connection. Make sure you completed the authorization and then try "Check connection" again. If it still fails, ask the agent to restart the flow so you get a fresh connection link.';
+        'We could not confirm the connection. Make sure you completed the authorization and then try "Check connection" again. If it still fails, ask me to restart the flow so you get a fresh connection link.';
     } else if (hasLaunchedAuth) {
       instructionMessage =
         'Once you finish authorizing, click "Check connection" so we can confirm everything worked.';
     } else {
       instructionMessage =
-        'Click the button to open the authorization flow. After you approve access, come back and send a message to the agent like "Continue".';
+        'Click the button to open the authorization flow. After you approve access, come back and send me a message like "Continue".';
     }
   }
 
@@ -524,7 +524,7 @@ export function ComposioConnectionContent(props: ComposioRenderProps) {
         <p className="text-sm text-rose-500">
           {error?.message ??
             "Try again in a moment, or reach out to support if this keeps happening."}{" "}
-          If the problem persists, ask the agent to retry the connection so you receive a fresh authorization link.
+          If the problem persists, ask me to retry the connection so you receive a fresh authorization link.
         </p>
       </div>
     );
@@ -559,7 +559,7 @@ export function ComposioConnectionContent(props: ComposioRenderProps) {
 
       {isDeleted ? (
         <div className="mt-4 rounded-lg border border-indigo-200 bg-indigo-50 px-4 py-3 text-sm text-indigo-700">
-          This connection has been disconnected. Ask the agent to initiate a new
+          This connection has been disconnected. Ask me to initiate a new
           connection so you receive a fresh authorization link.
         </div>
       ) : null}

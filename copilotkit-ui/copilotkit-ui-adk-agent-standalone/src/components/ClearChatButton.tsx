@@ -5,10 +5,14 @@ import { useCallback, useEffect, useState } from "react";
 
 export function ClearChatButton() {
   const { reset } = useCopilotChat();
-  const { setThreadId } = useCopilotContext();
+  const { setThreadId, isLoading } = useCopilotContext();
   const [status, setStatus] = useState<"idle" | "success">("idle");
 
   const handleClear = useCallback(() => {
+    if (isLoading) {
+      return;
+    }
+
     const newThreadId =
       typeof crypto !== "undefined" && "randomUUID" in crypto
         ? crypto.randomUUID()
@@ -17,7 +21,7 @@ export function ClearChatButton() {
     setThreadId(newThreadId);
     reset();
     setStatus("success");
-  }, [reset, setThreadId]);
+  }, [reset, setThreadId, isLoading]);
 
   useEffect(() => {
     if (status !== "success") {
@@ -37,9 +41,10 @@ export function ClearChatButton() {
     <button
       type="button"
       onClick={handleClear}
-      className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm transition-all hover:border-slate-300 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2 active:scale-[0.98]"
+      className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm transition-all hover:border-slate-300 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
       aria-label="Clear chat history"
       title={status === "success" ? "Chat cleared" : "Clear chat history"}
+      disabled={isLoading}
     >
       <span aria-hidden className="text-base leading-none">
         {status === "success" ? "✅" : "🧹"}
