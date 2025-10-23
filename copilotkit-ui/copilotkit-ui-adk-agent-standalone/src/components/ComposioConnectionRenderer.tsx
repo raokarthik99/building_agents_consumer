@@ -33,7 +33,9 @@ export function ComposioConnectionContent(props: ComposioRenderProps) {
             ⚙️
           </span>
           <div>
-            <p className="text-sm font-medium">We&apos;re getting things ready…</p>
+            <p className="text-sm font-medium">
+              We&apos;re getting things ready…
+            </p>
             <p className="text-xs text-slate-500">
               Sit tight while we prepare your Composio connection.
             </p>
@@ -72,7 +74,8 @@ export function ComposioConnectionContent(props: ComposioRenderProps) {
         <div className="flex-1">
           <div className="flex items-center gap-2">
             <h3 className="text-base font-semibold text-slate-800">
-              {(args as { provider?: string })?.provider ?? "Composio Connection"}
+              {(args as { provider?: string })?.provider ??
+                "Connect your account"}
             </h3>
             {response?.status ? (
               <span
@@ -96,14 +99,14 @@ export function ComposioConnectionContent(props: ComposioRenderProps) {
           rel="noopener noreferrer"
           className="mt-4 inline-flex w-full items-center justify-center rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-600"
         >
-          Connect
+          Connect & Authorize
         </a>
       ) : null}
 
       <p className="mt-3 text-xs text-slate-500">
         Once you&apos;re done, come back and send a new message to the agent by
-        saying something like &quot;Continue&quot;, &quot;Done&quot;, etc. so the agent can
-        verify the connection and resume the task.
+        saying something like &quot;Continue&quot;, &quot;Done&quot;, etc. so
+        the agent can verify the connection and resume the task.
       </p>
     </div>
   );
