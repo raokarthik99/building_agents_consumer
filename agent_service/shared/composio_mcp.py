@@ -160,29 +160,6 @@ class ComposioMCPIntegration:
             invocation_id,
         )
 
-    def normalize_initiate_connection_response(
-        self,
-        tool: BaseTool,
-        args: Dict[str, Any],
-        tool_context: ToolContext,
-        tool_response: Any,
-    ) -> Optional[Dict[str, Any]]:
-        if (
-            tool.name != self._settings.initiate_connection_tool_name
-            or tool_response is None
-        ):
-            return None
-
-        payload = self._extract_structured_payload(tool_response)
-        if payload is None:
-            logger.warning(
-                "Unable to normalize response from %s tool; leaving response untouched",
-                self._settings.initiate_connection_tool_name,
-            )
-            return None
-
-        return payload
-
     def _generate_composio_mcp_instances(
         self,
         user_id_override: Optional[str],
@@ -254,53 +231,7 @@ class ComposioMCPIntegration:
             ):
                 yield tool
 
-    def _extract_structured_payload(
-        self,
-        raw_response: Any,
-    ) -> Optional[Dict[str, Any]]:
-        response_candidate = raw_response
-
-        if isinstance(raw_response, dict):
-            candidate_from_result = raw_response.get("result")
-            if isinstance(candidate_from_result, dict):
-                return candidate_from_result
-            if candidate_from_result is not None:
-                response_candidate = candidate_from_result
-            else:
-                return raw_response
-
-        try:
-            from mcp.types import CallToolResult
-        except Exception:  # pragma: no cover - MCP library always available in runtime
-            CallToolResult = None  # type: ignore[assignment]
-
-        if CallToolResult and isinstance(response_candidate, CallToolResult):
-            if response_candidate.structuredContent:
-                structured = response_candidate.structuredContent
-                if isinstance(structured, dict):
-                    return structured
-
-            for block in response_candidate.content:
-                text_value = getattr(block, "text", None)
-                if text_value:
-                    parsed = self._try_parse_json(text_value)
-                    if parsed is not None:
-                        return parsed
-            return None
-
-        if isinstance(response_candidate, str):
-            return self._try_parse_json(response_candidate)
-
-        return None
-
-    def _try_parse_json(self, serialized: str) -> Optional[Dict[str, Any]]:
-        try:
-            parsed = json.loads(serialized)
-        except json.JSONDecodeError:
-            logger.debug(
-                "Failed to parse JSON payload from tool response text")
-            return None
-        return parsed if isinstance(parsed, dict) else None
+    # Extract/parse helpers moved to shared.tool_response_utils
 
     def _iter_config_ids(self):
         raw_value = require_env(

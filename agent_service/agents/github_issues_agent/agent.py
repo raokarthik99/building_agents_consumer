@@ -10,6 +10,7 @@ from google.adk.models.lite_llm import LiteLlm
 
 from shared.auth import get_supabase_user_id
 from shared.composio_mcp import ComposioMCPIntegration, ComposioMCPSettings
+from shared.tool_response_utils import normalize_mcp_tool_response_payload
 from shared.env import require_env, require_env_with_fallback
 
 load_dotenv()
@@ -95,7 +96,7 @@ def get_root_agent() -> Agent:
         instruction=AGENT_INSTRUCTION,
         before_agent_callback=composio_integration.before_agent_callback,
         after_agent_callback=composio_integration.after_agent_callback,
-        after_tool_callback=composio_integration.normalize_initiate_connection_response,
+        after_tool_callback=normalize_mcp_tool_response_payload,
     )
 
 

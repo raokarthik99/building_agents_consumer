@@ -24,9 +24,9 @@ export default async function RootLayout({
     : undefined;
 
   return (
-    <html lang="en">
-      <body className="min-h-screen bg-slate-50 text-slate-900 antialiased">
-        <div className="flex min-h-screen flex-col">
+    <html lang="en" className="h-full">
+      <body className="h-full min-h-screen overflow-hidden bg-slate-50 text-slate-900 antialiased">
+        <div className="flex h-full flex-col overflow-hidden">
           <AppHeader user={user} />
           <CopilotKit
             runtimeUrl="/api/copilotkit"
@@ -34,7 +34,9 @@ export default async function RootLayout({
             headers={copilotHeaders}
             properties={copilotProperties}
           >
-            <main className="flex flex-1 h-full flex-col">{children}</main>
+            <main className="flex flex-1 min-h-0 flex-col overflow-hidden">
+              {children}
+            </main>
           </CopilotKit>
           <AppFooter />
         </div>
