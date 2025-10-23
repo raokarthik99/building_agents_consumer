@@ -158,7 +158,7 @@ function ToolCallCard({ data }: ToolCallCardProps) {
         onClick={() => setIsOpen((prev) => !prev)}
         className="flex w-full items-center gap-3 px-4 py-3 text-left transition hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500"
       >
-        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-600 text-lg text-white shadow-sm">
+        <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-indigo-200 bg-indigo-50 text-lg text-indigo-600 shadow-sm">
           🛠️
         </div>
         <div className="flex-1">

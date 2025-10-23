@@ -306,7 +306,7 @@ export function ComposioConnectionContent(props: ComposioRenderProps) {
       }
 
       setSuccessMessage(
-        "Refresh initiated. We’ll verify the connection to confirm the latest status."
+        "Refresh initiated. We'll verify the connection to confirm the latest status."
       );
       void handleWaitForConnection();
     } catch (err) {
@@ -475,6 +475,26 @@ export function ComposioConnectionContent(props: ComposioRenderProps) {
     !isDeleted && Boolean(connectedAccountId);
   const showAuthInstructions = showPrimaryActions && !hasActiveConnection;
   const showActiveInstructions = showPrimaryActions && hasActiveConnection;
+  let instructionMessage: string | null = null;
+
+  if (showActiveInstructions) {
+    instructionMessage =
+      'Everything looks connected. If the integration stops responding, click "Refresh connection" to check the latest status.';
+  } else if (showAuthInstructions) {
+    if (isWaiting) {
+      instructionMessage =
+        "We're verifying the connection. If you've already finished authorizing, this usually takes just a moment.";
+    } else if (waitError) {
+      instructionMessage =
+        'We could not confirm the connection. Make sure you completed the authorization and then try "Check connection" again. If it still fails, ask the agent to restart the flow so you get a fresh connection link.';
+    } else if (hasLaunchedAuth) {
+      instructionMessage =
+        'Once you finish authorizing, click "Check connection" so we can confirm everything worked.';
+    } else {
+      instructionMessage =
+        'Click the button to open the authorization flow. After you approve access, come back and send a message to the agent like "Continue".';
+    }
+  }
 
   if (status !== "complete") {
     return (
@@ -503,7 +523,8 @@ export function ComposioConnectionContent(props: ComposioRenderProps) {
         <p className="font-semibold">We couldn&apos;t start the connection.</p>
         <p className="text-sm text-rose-500">
           {error?.message ??
-            "Try again in a moment, or reach out to support if this keeps happening."}
+            "Try again in a moment, or reach out to support if this keeps happening."}{" "}
+          If the problem persists, ask the agent to retry the connection so you receive a fresh authorization link.
         </p>
       </div>
     );
@@ -512,7 +533,7 @@ export function ComposioConnectionContent(props: ComposioRenderProps) {
   return (
     <div className="w-full rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
       <div className="flex items-start gap-3">
-        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-indigo-600 text-lg text-white">
+        <div className="flex h-10 w-10 items-center justify-center rounded-lg border border-indigo-200 bg-indigo-50 text-lg text-indigo-600">
           🔗
         </div>
         <div className="flex-1">
@@ -590,17 +611,8 @@ export function ComposioConnectionContent(props: ComposioRenderProps) {
           ) : null}
         </div>
       )}
-      {showAuthInstructions ? (
-        <p className="mt-3 text-xs text-slate-500">
-          Click the button to open the authorization flow. Once you authorize,
-          come back and send a message to the agent like &quot;Continue&quot;.
-        </p>
-      ) : null}
-      {showActiveInstructions ? (
-        <p className="mt-3 text-xs text-slate-500">
-          Everything looks connected. If the integration stops responding,
-          click &quot;Refresh connection&quot; to check the latest status.
-        </p>
+      {instructionMessage ? (
+        <p className="mt-3 text-xs text-slate-500">{instructionMessage}</p>
       ) : null}
     </div>
   );
