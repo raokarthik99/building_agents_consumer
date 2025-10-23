@@ -2,7 +2,7 @@ fastapi
 uvicorn[standard]
 python-dotenv
 pydantic
-google-adk
+google-adk==1.15.1 # TODO: Upgrade to latest adk version once https://github.com/google/adk-python/issues/3237 is fixed
 google-genai
 ag-ui-adk
 composio
