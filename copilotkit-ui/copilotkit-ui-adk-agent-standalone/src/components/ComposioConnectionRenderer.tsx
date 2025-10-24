@@ -1,9 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Image from "next/image";
 import { useRenderToolCall } from "@copilotkit/react-core";
 import type { CatchAllActionRenderProps } from "@copilotkit/react-core";
-import type { ConnectedAccountRetrieveResponse } from "@composio/core";
+import type {
+  ConnectedAccountRetrieveResponse,
+  ToolkitRetrieveResponse,
+} from "@composio/core";
 
 const STATUS_STYLES = {
   SUCCESS: "bg-emerald-100 text-emerald-600",
@@ -49,6 +53,80 @@ function getConnectedAccountId(response: unknown): string | undefined {
     : undefined;
 }
 
+const ACCOUNT_NAME_CANDIDATE_KEYS = [
+  "account_email",
+  "account_name",
+  "account_username",
+  "account_display_name",
+  "email",
+  "name",
+  "username",
+  "login",
+  "user",
+  "user_name",
+] as const;
+
+function extractAccountFriendlyName(
+  account: ConnectedAccountRetrieveResponse | null | undefined
+): string | null {
+  const stateObject =
+    account && typeof account === "object"
+      ? (account as { state?: unknown }).state
+      : null;
+
+  if (!stateObject || typeof stateObject !== "object") {
+    return null;
+  }
+
+  const candidate =
+    "val" in stateObject && stateObject.val && typeof stateObject.val === "object"
+      ? (stateObject.val as Record<string, unknown>)
+      : null;
+
+  if (!candidate) {
+    return null;
+  }
+
+  for (const key of ACCOUNT_NAME_CANDIDATE_KEYS) {
+    const value = candidate[key];
+    if (typeof value === "string" && value.trim()) {
+      return value;
+    }
+  }
+
+  return null;
+}
+
+function getAccountUpdatedAt(
+  account: ConnectedAccountRetrieveResponse | null | undefined
+): string | null {
+  if (!account) {
+    return null;
+  }
+
+  if (typeof account.updatedAt === "string" && account.updatedAt.trim()) {
+    return account.updatedAt;
+  }
+
+  const legacyValue = (account as Record<string, unknown>)["updated_at"];
+
+  return typeof legacyValue === "string" && legacyValue.trim().length > 0
+    ? legacyValue
+    : null;
+}
+
+function formatToolkitNameFromSlug(slug?: string | null) {
+  if (!slug) {
+    return undefined;
+  }
+
+  return slug
+    .split(/[-_]/)
+    .filter(Boolean)
+    .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
+    .join(" ");
+}
+
 function formatStatus(status?: string) {
   return status
     ?.toLowerCase()
@@ -79,6 +157,7 @@ export function ComposioConnectionContent(props: ComposioRenderProps) {
 
   const [connectedAccount, setConnectedAccount] =
     useState<ConnectedAccountRetrieveResponse | null>(null);
+  const [toolkit, setToolkit] = useState<ToolkitRetrieveResponse | null>(null);
   const [isWaiting, setIsWaiting] = useState(false);
   const [waitError, setWaitError] = useState<string | null>(null);
   const [hasLaunchedAuth, setHasLaunchedAuth] = useState(false);
@@ -90,10 +169,21 @@ export function ComposioConnectionContent(props: ComposioRenderProps) {
   const [overrideStatus, setOverrideStatus] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [isDeleted, setIsDeleted] = useState(false);
+  const [isDetailsLoading, setIsDetailsLoading] = useState(false);
+  const [detailsError, setDetailsError] = useState<string | null>(null);
   const authWindowRef = useRef<Window | null>(null);
+  const connectionKeyRef = useRef<string | null>(null);
 
-  useEffect(() => {
+  const closeAuthWindow = useCallback(() => {
+    if (authWindowRef.current && !authWindowRef.current.closed) {
+      authWindowRef.current.close();
+    }
+    authWindowRef.current = null;
+  }, []);
+
+  const resetState = useCallback(() => {
     setConnectedAccount(null);
+    setToolkit(null);
     setIsWaiting(false);
     setWaitError(null);
     setHasLaunchedAuth(false);
@@ -102,22 +192,131 @@ export function ComposioConnectionContent(props: ComposioRenderProps) {
     setOverrideStatus(null);
     setSuccessMessage(null);
     setIsDeleted(false);
-    if (authWindowRef.current && !authWindowRef.current.closed) {
-      authWindowRef.current.close();
-    }
-    authWindowRef.current = null;
+    setIsDetailsLoading(false);
+    setDetailsError(null);
+    closeAuthWindow();
     setWaitController((previous) => {
       if (previous) {
         previous.abort();
       }
       return null;
     });
-  }, [result]);
+  }, [closeAuthWindow]);
 
   const connectedAccountId = useMemo(
     () => getConnectedAccountId(response),
     [response]
   );
+
+  useEffect(() => {
+    if (status !== "complete") {
+      if (connectionKeyRef.current !== null) {
+        resetState();
+        connectionKeyRef.current = null;
+      }
+      return;
+    }
+
+    const key = connectedAccountId ?? "__no_connection__";
+
+    if (connectionKeyRef.current === key) {
+      return;
+    }
+
+    resetState();
+    connectionKeyRef.current = key;
+  }, [connectedAccountId, resetState, status]);
+
+  const loadConnectionDetails = useCallback(async () => {
+    if (!connectedAccountId) {
+      setToolkit(null);
+      setDetailsError(null);
+      return;
+    }
+
+    setIsDetailsLoading(true);
+    setDetailsError(null);
+
+    try {
+      const response = await fetch(
+        `/api/composio/connected-account/${connectedAccountId}`
+      );
+
+      const body = (await response.json().catch(() => ({}))) as {
+        connectedAccount?: ConnectedAccountRetrieveResponse;
+        toolkit?: ToolkitRetrieveResponse | null;
+        error?: { message?: string };
+      };
+
+      if (!response.ok) {
+        const message =
+          body?.error?.message ??
+          `Unable to load the connection details (status ${response.status}).`;
+        throw new Error(message);
+      }
+
+      if (body.connectedAccount) {
+        setConnectedAccount(body.connectedAccount);
+      }
+
+      setToolkit(body.toolkit ?? null);
+    } catch (err) {
+      setDetailsError(
+        err instanceof Error
+          ? err.message
+          : "We couldn't load the connection details."
+      );
+    } finally {
+      setIsDetailsLoading(false);
+    }
+  }, [connectedAccountId]);
+
+  useEffect(() => {
+    void loadConnectionDetails();
+  }, [loadConnectionDetails]);
+
+  const providerName = (args as { provider?: string })?.provider;
+  const accountDisplayName = useMemo(
+    () => extractAccountFriendlyName(connectedAccount),
+    [connectedAccount]
+  );
+  const toolkitSlug = connectedAccount?.toolkit?.slug ?? toolkit?.slug ?? null;
+  const integrationName =
+    toolkit?.name ??
+    formatToolkitNameFromSlug(toolkitSlug) ??
+    providerName ??
+    "Connect your account";
+  const accountUpdatedAt = useMemo(
+    () => getAccountUpdatedAt(connectedAccount),
+    [connectedAccount]
+  );
+  const formattedUpdatedAt = useMemo(() => {
+    if (!accountUpdatedAt) {
+      return null;
+    }
+    const timestamp = Date.parse(accountUpdatedAt);
+    if (Number.isNaN(timestamp)) {
+      return null;
+    }
+    return new Intl.DateTimeFormat(undefined, {
+      dateStyle: "medium",
+      timeStyle: "short",
+    }).format(new Date(timestamp));
+  }, [accountUpdatedAt]);
+  const logoUrl = useMemo(() => {
+    const candidate = toolkit?.meta?.logo;
+    return typeof candidate === "string" && candidate.trim().length > 0
+      ? candidate
+      : null;
+  }, [toolkit]);
+  const toolkitDescription = useMemo(() => {
+    const description = toolkit?.meta?.description;
+    if (typeof description !== "string" || !description.trim()) {
+      return null;
+    }
+    const trimmed = description.trim();
+    return trimmed.length > 160 ? `${trimmed.slice(0, 157)}…` : trimmed;
+  }, [toolkit]);
 
   const displayStatus =
     overrideStatus ?? connectedAccount?.status ?? response?.status;
@@ -125,21 +324,32 @@ export function ComposioConnectionContent(props: ComposioRenderProps) {
     STATUS_STYLES[displayStatus as keyof typeof STATUS_STYLES] ??
     STATUS_STYLES.default;
   const humanReadableStatus = formatStatus(displayStatus);
+  const hasActiveConnection =
+    !isDeleted &&
+    (overrideStatus ?? connectedAccount?.status ?? response?.status) ===
+      "ACTIVE";
+  const baseIntegrationLabel =
+    integrationName === "Connect your account"
+      ? "your account"
+      : integrationName;
+  const connectionTitle = hasActiveConnection
+    ? integrationName
+    : integrationName === "Connect your account"
+    ? "Connect your account"
+    : `Connect to your ${integrationName} account`;
   const defaultMessage =
     response?.message ??
-    "Everything is set on our side. Follow the next step to wrap things up.";
+    `Everything is set on our side for ${baseIntegrationLabel}. Follow the next step to wrap things up.`;
   const statusMessage =
     successMessage ??
     (connectedAccount
       ? connectedAccount.statusReason ??
         (connectedAccount.status === "ACTIVE"
-          ? "Connection verified. You're all set!"
+          ? accountDisplayName
+            ? `Connection verified. You're signed in as ${accountDisplayName}.`
+            : "Connection verified. You're all set!"
           : defaultMessage)
       : defaultMessage);
-  const hasActiveConnection =
-    !isDeleted &&
-    (overrideStatus ?? connectedAccount?.status ?? response?.status) ===
-      "ACTIVE";
 
   const launchAuthWindow = useCallback((redirectUrl: string) => {
     if (typeof window === "undefined") {
@@ -203,7 +413,6 @@ export function ComposioConnectionContent(props: ComposioRenderProps) {
     }
 
     setIsDeleted(false);
-    setConnectedAccount(null);
     setIsWaiting(true);
     setWaitError(null);
     setSuccessMessage(null);
@@ -234,6 +443,7 @@ export function ComposioConnectionContent(props: ComposioRenderProps) {
 
       setConnectedAccount(body.connectedAccount);
       setOverrideStatus(null);
+      void loadConnectionDetails();
     } catch (err) {
       setWaitError(
         err instanceof Error
@@ -246,7 +456,7 @@ export function ComposioConnectionContent(props: ComposioRenderProps) {
       setIsWaiting(false);
       setWaitController(null);
     }
-  }, [connectedAccountId]);
+  }, [connectedAccountId, loadConnectionDetails]);
 
   const handleRefresh = useCallback(async () => {
     if (!connectedAccountId || isWaiting || isRefreshing || isDeleting) {
@@ -327,13 +537,6 @@ export function ComposioConnectionContent(props: ComposioRenderProps) {
     launchAuthWindow,
   ]);
 
-  const closeAuthWindow = useCallback(() => {
-    if (authWindowRef.current && !authWindowRef.current.closed) {
-      authWindowRef.current.close();
-    }
-    authWindowRef.current = null;
-  }, []);
-
   const handleDelete = useCallback(async () => {
     if (!connectedAccountId || isDeleting || isRefreshing || isWaiting) {
       return;
@@ -361,6 +564,9 @@ export function ComposioConnectionContent(props: ComposioRenderProps) {
         throw new Error(message);
       }
 
+      setToolkit(null);
+      setDetailsError(null);
+      setIsDetailsLoading(false);
       setConnectedAccount(null);
       setOverrideStatus("INACTIVE");
       setSuccessMessage(
@@ -478,21 +684,17 @@ export function ComposioConnectionContent(props: ComposioRenderProps) {
   let instructionMessage: string | null = null;
 
   if (showActiveInstructions) {
-    instructionMessage =
-      'Everything looks connected. If the integration stops responding, click "Refresh connection" to check the latest status. When you return to the chat, send me a quick message like "Continue" so I resume the original task.';
+    instructionMessage = `Everything with ${baseIntegrationLabel} looks connected. If it stops responding, click "Refresh connection" to check the latest status. When you return to the chat, send me a quick message like "Continue" so I resume the original task.`;
   } else if (showAuthInstructions) {
     if (isWaiting) {
-      instructionMessage =
-        "We're verifying the connection. If you've already finished authorizing, this usually takes just a moment.";
+      instructionMessage = `We're verifying the ${baseIntegrationLabel} connection. If you've already finished authorizing, this usually takes just a moment.`;
     } else if (waitError) {
       instructionMessage =
-        'We could not confirm the connection. Make sure you completed the authorization and then try "Check connection" again. If it still fails, ask me to restart the flow so you get a fresh connection link.';
+        'We could not confirm the connection. Make sure you completed the authorization and then try "Check connection" again. If it still fails, ask me to restart the flow so you get a fresh authorization link.';
     } else if (hasLaunchedAuth) {
-      instructionMessage =
-        'Once you finish authorizing, click "Check connection" so we can confirm everything worked.';
+      instructionMessage = `Once you finish authorizing ${baseIntegrationLabel}, click "Check connection" so we can confirm everything worked.`;
     } else {
-      instructionMessage =
-        'Click the button to open the authorization flow. After you approve access, come back and send me a message like "Continue".';
+      instructionMessage = `Click the button to open the ${baseIntegrationLabel} authorization flow. After you approve access, come back and send me a message like "Continue".`;
     }
   }
 
@@ -533,26 +735,64 @@ export function ComposioConnectionContent(props: ComposioRenderProps) {
   return (
     <div className="w-full rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
       <div className="flex items-start gap-3">
-        <div className="flex h-10 w-10 items-center justify-center rounded-lg border border-indigo-200 bg-indigo-50 text-lg text-indigo-600">
-          🔗
+        <div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-lg border border-slate-200 bg-white text-lg font-semibold text-indigo-600">
+          {logoUrl ? (
+            <Image
+              src={logoUrl}
+              alt={`${integrationName} logo`}
+              width={40}
+              height={40}
+              sizes="40px"
+              unoptimized
+              className="h-full w-full object-contain p-1.5"
+            />
+          ) : (
+            <span aria-hidden="true">🔗</span>
+          )}
         </div>
         <div className="flex-1">
-          <div className="flex items-center gap-2">
-            <h3 className="text-base font-semibold text-slate-800">
-              {(args as { provider?: string })?.provider ??
-                "Connect your account"}
-            </h3>
-            {response?.status ? (
+          <div className="flex flex-wrap items-center gap-2 text-slate-800">
+            <h3 className="text-base font-semibold">{connectionTitle}</h3>
+            {displayStatus ? (
               <span
                 className={`rounded-full px-2 py-0.5 text-xs font-medium ${statusBadgeClass}`}
               >
                 {humanReadableStatus}
               </span>
             ) : null}
+            {isDetailsLoading ? (
+              <span className="text-xs text-slate-400">Refreshing details…</span>
+            ) : null}
           </div>
+          {toolkitDescription ? (
+            <p className="mt-1 text-xs text-slate-500">{toolkitDescription}</p>
+          ) : null}
           <p className="mt-1 text-sm text-slate-600">{statusMessage}</p>
+          {detailsError && !toolkit ? (
+            <p className="mt-2 text-xs text-amber-600">{detailsError}</p>
+          ) : null}
           {waitError ? (
             <p className="mt-2 text-xs text-rose-500">{waitError}</p>
+          ) : null}
+          {(accountDisplayName || formattedUpdatedAt) && !isDeleted ? (
+            <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-slate-500">
+              {accountDisplayName ? (
+                <span className="flex items-center gap-1">
+                  <span className="text-slate-400">Signed in as</span>
+                  <span className="font-medium text-slate-600">
+                    {accountDisplayName}
+                  </span>
+                </span>
+              ) : null}
+              {formattedUpdatedAt ? (
+                <span className="flex items-center gap-1">
+                  <span className="text-slate-400">Last checked</span>
+                  <span className="font-medium text-slate-600">
+                    {formattedUpdatedAt}
+                  </span>
+                </span>
+              ) : null}
+            </div>
           ) : null}
         </div>
       </div>
