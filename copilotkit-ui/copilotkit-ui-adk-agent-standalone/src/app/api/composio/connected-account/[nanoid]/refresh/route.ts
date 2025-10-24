@@ -25,11 +25,11 @@ const missingApiKey = NextResponse.json(
   { status: 500 }
 );
 
-export async function POST(
-  _req: NextRequest,
-  context: { params: { nanoid?: string } }
-) {
-  const nanoid = context.params.nanoid;
+type RouteParams = { nanoid?: string };
+type RouteContext = { params: Promise<RouteParams> };
+
+export async function POST(_req: NextRequest, context: RouteContext) {
+  const { nanoid } = await context.params;
 
   if (typeof nanoid !== "string" || !nanoid.trim()) {
     return invalidRequest;

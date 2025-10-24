@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
-import { useRenderToolCall } from "@copilotkit/react-core";
+import { useCopilotChat, useRenderToolCall } from "@copilotkit/react-core";
+import { TextMessage, MessageRole } from "@copilotkit/runtime-client-gql";
 import type { CatchAllActionRenderProps } from "@copilotkit/react-core";
 import type {
   ConnectedAccountRetrieveResponse,
@@ -53,6 +54,9 @@ export function ComposioConnectionContent(props: ComposioRenderProps) {
   const [detailsError, setDetailsError] = useState<string | null>(null);
   const authWindowRef = useRef<Window | null>(null);
   const connectionKeyRef = useRef<string | null>(null);
+  const { appendMessage } = useCopilotChat();
+  const shouldAutoContinueRef = useRef<boolean>(false);
+  const autoContinueSentForRef = useRef<string | null>(null);
 
   const closeAuthWindow = useCallback(() => {
     closeAuthPopup(authWindowRef);
@@ -72,6 +76,8 @@ export function ComposioConnectionContent(props: ComposioRenderProps) {
     setIsDeleted(false);
     setIsDetailsLoading(false);
     setDetailsError(null);
+    shouldAutoContinueRef.current = false;
+    autoContinueSentForRef.current = null;
     closeAuthWindow();
     setWaitController((previous) => {
       if (previous) {
@@ -279,6 +285,7 @@ export function ComposioConnectionContent(props: ComposioRenderProps) {
     setSuccessMessage(null);
     setIsDeleted(false);
     setIsRefreshing(true);
+    shouldAutoContinueRef.current = false;
 
     try {
       const response = await fetch(
@@ -393,6 +400,8 @@ export function ComposioConnectionContent(props: ComposioRenderProps) {
       setHasLaunchedAuth(false);
       setOverrideRedirectUrl(null);
       closeAuthWindow();
+      shouldAutoContinueRef.current = false;
+      autoContinueSentForRef.current = null;
       if (waitController) {
         waitController.abort();
       }
@@ -428,6 +437,7 @@ export function ComposioConnectionContent(props: ComposioRenderProps) {
 
     setWaitError(null);
     setSuccessMessage(null);
+    shouldAutoContinueRef.current = false;
 
     if (hasActiveConnection) {
       void handleRefresh();
@@ -459,6 +469,7 @@ export function ComposioConnectionContent(props: ComposioRenderProps) {
       return;
     }
 
+    shouldAutoContinueRef.current = true;
     void handleWaitForConnection();
   }, [
     connectedAccountId,
@@ -479,6 +490,45 @@ export function ComposioConnectionContent(props: ComposioRenderProps) {
       waitController.abort();
     }
   }, [waitController]);
+
+  useEffect(() => {
+    if (!hasActiveConnection || !shouldAutoContinueRef.current) {
+      return;
+    }
+
+    const connectionId =
+      (typeof connectedAccount?.id === "string" &&
+      connectedAccount.id.trim().length > 0
+        ? connectedAccount.id
+        : null) ?? connectedAccountId;
+
+    if (connectionId && autoContinueSentForRef.current === connectionId) {
+      shouldAutoContinueRef.current = false;
+      return;
+    }
+
+    shouldAutoContinueRef.current = false;
+    if (connectionId) {
+      autoContinueSentForRef.current = connectionId;
+    }
+
+    void appendMessage(
+      new TextMessage({
+        role: MessageRole.User,
+        content: "Continue",
+      })
+    ).catch((error) => {
+      console.error("Failed to send automatic Continue message:", error);
+      if (connectionId && autoContinueSentForRef.current === connectionId) {
+        autoContinueSentForRef.current = null;
+      }
+    });
+  }, [
+    appendMessage,
+    connectedAccount,
+    connectedAccountId,
+    hasActiveConnection,
+  ]);
 
   useEffect(() => {
     if (hasActiveConnection) {
@@ -510,17 +560,17 @@ export function ComposioConnectionContent(props: ComposioRenderProps) {
   let instructionMessage: string | null = null;
 
   if (showActiveInstructions) {
-    instructionMessage = `Everything with ${baseIntegrationLabel} looks connected. If it stops responding, click "Refresh connection" to check the latest status. When you return to the chat, send me a quick message like "Continue" so I resume the original task.`;
+    instructionMessage = `Everything with ${baseIntegrationLabel} looks connected. If it stops responding, click "Refresh connection" to check the latest status. I'm already nudging the original task to continue for you.`;
   } else if (showAuthInstructions) {
     if (isWaiting) {
-      instructionMessage = `We're verifying the ${baseIntegrationLabel} connection. If you've already finished authorizing, this usually takes just a moment.`;
+      instructionMessage = `We're verifying the ${baseIntegrationLabel} connection. If you've already finished authorizing, this usually takes just a moment—I'll pick up the original task as soon as we confirm the connection is active.`;
     } else if (waitError) {
       instructionMessage =
         'We could not confirm the connection. Make sure you completed the authorization and then try "Check connection" again. If it still fails, ask me to restart the flow so you get a fresh authorization link.';
     } else if (hasLaunchedAuth) {
-      instructionMessage = `Once you finish authorizing ${baseIntegrationLabel}, click "Check connection" so we can confirm everything worked.`;
+      instructionMessage = `Once you finish authorizing ${baseIntegrationLabel}, click "Check connection" so we can confirm everything worked. I'll resume the original task automatically afterward.`;
     } else {
-      instructionMessage = `Click the button to open the ${baseIntegrationLabel} authorization flow. After you approve access, come back and send me a message like "Continue".`;
+      instructionMessage = `Click the button to open the ${baseIntegrationLabel} authorization flow. After you approve access, I'll automatically continue the task once the connection is verified.`;
     }
   }
 
