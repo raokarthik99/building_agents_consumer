@@ -18,20 +18,13 @@ import {
   getAccountUpdatedAt,
   getConnectedAccountId,
 } from "@/lib/composio/connectedAccount";
-
-type WaitForConnectionResponse = {
-  connectedAccount?: ConnectedAccountRetrieveResponse;
-  error?: { message?: string };
-};
+import { closeAuthPopup, openAuthPopup } from "@/lib/composio/authPopup";
+import { waitForConnectedAccount } from "@/lib/composio/waitForConnection";
 
 type ComposioRenderProps = Pick<
   CatchAllActionRenderProps,
   "args" | "result" | "status"
 >;
-
-const POPUP_WIDTH = 480;
-const POPUP_HEIGHT = 640;
-const POPUP_NAME = "composio-auth-window";
 
 export function ComposioConnectionContent(props: ComposioRenderProps) {
   const { args, result, status } = props;
@@ -52,6 +45,9 @@ export function ComposioConnectionContent(props: ComposioRenderProps) {
   const [isDeleting, setIsDeleting] = useState(false);
   const [overrideStatus, setOverrideStatus] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [overrideRedirectUrl, setOverrideRedirectUrl] = useState<string | null>(
+    null
+  );
   const [isDeleted, setIsDeleted] = useState(false);
   const [isDetailsLoading, setIsDetailsLoading] = useState(false);
   const [detailsError, setDetailsError] = useState<string | null>(null);
@@ -59,10 +55,7 @@ export function ComposioConnectionContent(props: ComposioRenderProps) {
   const connectionKeyRef = useRef<string | null>(null);
 
   const closeAuthWindow = useCallback(() => {
-    if (authWindowRef.current && !authWindowRef.current.closed) {
-      authWindowRef.current.close();
-    }
-    authWindowRef.current = null;
+    closeAuthPopup(authWindowRef);
   }, []);
 
   const resetState = useCallback(() => {
@@ -75,6 +68,7 @@ export function ComposioConnectionContent(props: ComposioRenderProps) {
     setIsDeleting(false);
     setOverrideStatus(null);
     setSuccessMessage(null);
+    setOverrideRedirectUrl(null);
     setIsDeleted(false);
     setIsDetailsLoading(false);
     setDetailsError(null);
@@ -236,61 +230,10 @@ export function ComposioConnectionContent(props: ComposioRenderProps) {
           : defaultMessage)
       : defaultMessage);
 
-  const launchAuthWindow = useCallback((redirectUrl: string) => {
-    if (typeof window === "undefined") {
-      return false;
-    }
-
-    if (authWindowRef.current && !authWindowRef.current.closed) {
-      try {
-        authWindowRef.current.location.href = redirectUrl;
-        authWindowRef.current.focus();
-        return true;
-      } catch {
-        authWindowRef.current.close();
-        authWindowRef.current = null;
-      }
-    }
-
-    const dualScreenLeft =
-      typeof window.screenLeft === "number"
-        ? window.screenLeft
-        : window.screenX;
-    const dualScreenTop =
-      typeof window.screenTop === "number" ? window.screenTop : window.screenY;
-    const viewportWidth =
-      window.innerWidth ??
-      document.documentElement.clientWidth ??
-      window.screen.width;
-    const viewportHeight =
-      window.innerHeight ??
-      document.documentElement.clientHeight ??
-      window.screen.height;
-    const popupLeft = Math.max(
-      0,
-      dualScreenLeft + (viewportWidth - POPUP_WIDTH) / 2
-    );
-    const popupTop = Math.max(
-      0,
-      dualScreenTop + (viewportHeight - POPUP_HEIGHT) / 2
-    );
-    const features = [
-      `width=${POPUP_WIDTH}`,
-      `height=${POPUP_HEIGHT}`,
-      `top=${Math.floor(popupTop)}`,
-      `left=${Math.floor(popupLeft)}`,
-      "resizable=yes",
-      "scrollbars=yes",
-    ].join(",");
-    const popup = window.open(redirectUrl, POPUP_NAME, features);
-
-    if (!popup) {
-      return false;
-    }
-
-    authWindowRef.current = popup;
-    return true;
-  }, []);
+  const launchAuthWindow = useCallback(
+    (redirectUrl: string) => openAuthPopup(authWindowRef, redirectUrl),
+    []
+  );
 
   const handleWaitForConnection = useCallback(async () => {
     if (!connectedAccountId) {
@@ -306,28 +249,12 @@ export function ComposioConnectionContent(props: ComposioRenderProps) {
     setWaitController(controller);
 
     try {
-      const response = await fetch("/api/composio/wait-for-connection", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ connectedAccountId }),
+      const account = await waitForConnectedAccount(connectedAccountId, {
         signal: controller.signal,
       });
-
-      const body = (await response
-        .json()
-        .catch(() => ({}))) as WaitForConnectionResponse;
-
-      if (!response.ok || !body.connectedAccount) {
-        const message =
-          body?.error?.message ??
-          `Unable to verify the connection (status ${response.status}).`;
-        throw new Error(message);
-      }
-
-      setConnectedAccount(body.connectedAccount);
+      setConnectedAccount(account);
       setOverrideStatus(null);
+      setOverrideRedirectUrl(null);
       void loadConnectionDetails();
     } catch (err) {
       setWaitError(
@@ -382,14 +309,15 @@ export function ComposioConnectionContent(props: ComposioRenderProps) {
         .redirect_url;
       const redirectUrl =
         typeof redirectValue === "string" && redirectValue.trim().length > 0
-          ? redirectValue
-          : undefined;
+          ? redirectValue.trim()
+          : null;
 
       if (refreshedStatus) {
         setOverrideStatus(refreshedStatus);
       }
 
       if (redirectUrl) {
+        setOverrideRedirectUrl(redirectUrl);
         const launched = launchAuthWindow(redirectUrl);
         if (!launched) {
           setWaitError(
@@ -398,10 +326,14 @@ export function ComposioConnectionContent(props: ComposioRenderProps) {
           return;
         }
         setHasLaunchedAuth(true);
+      } else {
+        setOverrideRedirectUrl(null);
       }
 
       setSuccessMessage(
-        "Refresh initiated. We'll verify the connection to confirm the latest status."
+        redirectUrl
+          ? "Refresh initiated. Follow the Connect & Verify window to finish reauthorizing this connection."
+          : "Refresh initiated. We'll verify the connection to confirm the latest status."
       );
       void handleWaitForConnection();
     } catch (err) {
@@ -459,6 +391,7 @@ export function ComposioConnectionContent(props: ComposioRenderProps) {
       );
       setIsDeleted(true);
       setHasLaunchedAuth(false);
+      setOverrideRedirectUrl(null);
       closeAuthWindow();
       if (waitController) {
         waitController.abort();
@@ -501,8 +434,15 @@ export function ComposioConnectionContent(props: ComposioRenderProps) {
       return;
     }
 
-    if (response?.redirect_url && !hasActiveConnection) {
-      const launched = launchAuthWindow(response.redirect_url);
+    const redirectCandidate =
+      overrideRedirectUrl ??
+      (typeof response?.redirect_url === "string" &&
+      response.redirect_url.trim().length > 0
+        ? response.redirect_url.trim()
+        : null);
+
+    if (redirectCandidate && !hasActiveConnection) {
+      const launched = launchAuthWindow(redirectCandidate);
       if (!launched) {
         setWaitError(
           "We couldn't open the authorization window. Please disable your popup blocker and try again."
@@ -530,6 +470,7 @@ export function ComposioConnectionContent(props: ComposioRenderProps) {
     isWaiting,
     isRefreshing,
     launchAuthWindow,
+    overrideRedirectUrl,
     response?.redirect_url,
   ]);
 

@@ -18,6 +18,8 @@ import {
   getConnectedAccountId,
   shortenIdentifier,
 } from "@/lib/composio/connectedAccount";
+import { closeAuthPopup, openAuthPopup } from "@/lib/composio/authPopup";
+import { waitForConnectedAccount } from "@/lib/composio/waitForConnection";
 
 type ConnectedAccountsResponse = {
   connectedAccounts?: {
@@ -35,11 +37,12 @@ type BannerState = {
 };
 
 type AccountAction = "refresh" | "delete";
+type PendingAccountAction = AccountAction | "wait";
 
 type AccountActionState = Record<
   string,
   {
-    type: AccountAction;
+    type: PendingAccountAction;
   }
 >;
 
@@ -92,6 +95,16 @@ export function ManageConnectionsView() {
   const [pendingActions, setPendingActions] = useState<AccountActionState>({});
   const [isRefreshingList, startRefreshTransition] = useTransition();
   const hasLoadedRef = useRef(false);
+  const authWindowRef = useRef<Window | null>(null);
+  const waitControllersRef = useRef<Record<string, AbortController>>({});
+
+  const closeAuthWindow = useCallback(() => {
+    closeAuthPopup(authWindowRef);
+  }, []);
+
+  const launchAuthWindow = useCallback((redirectUrl: string) => {
+    return openAuthPopup(authWindowRef, redirectUrl);
+  }, []);
 
   const loadConnections = useCallback(
     async (mode: "initial" | "refresh" = "refresh") => {
@@ -168,6 +181,18 @@ export function ManageConnectionsView() {
     return () => window.clearTimeout(timeoutId);
   }, [banner]);
 
+  useEffect(
+    () => () => {
+      closeAuthWindow();
+      const controllers = waitControllersRef.current;
+      for (const controller of Object.values(controllers)) {
+        controller.abort();
+      }
+      waitControllersRef.current = {};
+    },
+    [closeAuthWindow]
+  );
+
   const toggleStatus = useCallback((value: string) => {
     setQuery((previous) => {
       const nextStatuses = new Set(previous.statuses);
@@ -231,11 +256,32 @@ export function ManageConnectionsView() {
 
   const triggerAction = useCallback(
     async (accountId: string, action: AccountAction) => {
+      const abortExistingWait = () => {
+        const existing = waitControllersRef.current[accountId];
+        if (existing) {
+          existing.abort();
+          delete waitControllersRef.current[accountId];
+        }
+      };
+
+      const clearPending = () => {
+        setPendingActions((previous) => {
+          const updated = { ...previous };
+          delete updated[accountId];
+          return updated;
+        });
+      };
+
+      abortExistingWait();
+      setBanner(null);
       setPendingActions((previous) => ({
         ...previous,
         [accountId]: { type: action },
       }));
-      setBanner(null);
+
+      let responsePayload: Record<string, unknown> | null = null;
+      let bannerState: BannerState | null = null;
+
       try {
         const endpoint =
           action === "refresh"
@@ -244,29 +290,68 @@ export function ManageConnectionsView() {
         const method = action === "refresh" ? "POST" : "DELETE";
 
         const response = await fetch(endpoint, { method });
-        const body = await response
-          .json()
-          .catch(() => ({} as { error?: { message?: string } }));
+        const body = await response.json().catch(
+          () =>
+            ({} as {
+              response?: Record<string, unknown> | null;
+              error?: { message?: string };
+            })
+        );
+
+        if (action === "refresh") {
+          responsePayload =
+            body &&
+            typeof body === "object" &&
+            body !== null &&
+            "response" in body
+              ? (body.response as Record<string, unknown> | null)
+              : null;
+        }
 
         if (!response.ok) {
           const message =
-            body?.error?.message ??
+            (body as { error?: { message?: string } })?.error?.message ??
             `Unable to ${
               action === "refresh" ? "refresh" : "disconnect"
             } the connection (status ${response.status}).`;
           throw new Error(message);
         }
 
-        const successMessage =
-          action === "refresh"
-            ? "Refresh initiated. We'll check back in a moment."
-            : "Connection removed. You can always reconnect by chatting with the agent.";
+        if (action === "refresh") {
+          const redirectCandidate =
+            responsePayload && typeof responsePayload === "object"
+              ? (responsePayload.redirect_url as unknown)
+              : null;
+          const redirectUrl =
+            typeof redirectCandidate === "string" && redirectCandidate.trim()
+              ? redirectCandidate.trim()
+              : null;
 
-        setBanner({ type: "success", message: successMessage });
-
-        startRefreshTransition(() => {
-          void loadConnections("refresh");
-        });
+          if (redirectUrl) {
+            const launched = launchAuthWindow(redirectUrl);
+            if (!launched) {
+              throw new Error(
+                "We created a new Connect & Verify link, but your browser blocked the popup. Please allow popups for this site and try refreshing again."
+              );
+            }
+            bannerState = {
+              type: "success",
+              message:
+                "Refresh initiated. Follow the Connect & Verify window to finish reauthorizing this account.",
+            };
+          } else {
+            bannerState = {
+              type: "success",
+              message: "Refresh initiated. We'll check back in a moment.",
+            };
+          }
+        } else {
+          bannerState = {
+            type: "success",
+            message:
+              "Connection removed. You can always reconnect by chatting with the agent.",
+          };
+        }
       } catch (err) {
         setBanner({
           type: "error",
@@ -275,15 +360,69 @@ export function ManageConnectionsView() {
               ? err.message
               : "We couldn't complete that request. Please try again.",
         });
-      } finally {
-        setPendingActions((previous) => {
-          const updated = { ...previous };
-          delete updated[accountId];
-          return updated;
-        });
+        clearPending();
+        return;
       }
+
+      if (action === "refresh") {
+        if (bannerState) {
+          setBanner(bannerState);
+        }
+
+        const controller = new AbortController();
+        waitControllersRef.current[accountId] = controller;
+        setPendingActions((previous) => ({
+          ...previous,
+          [accountId]: { type: "wait" },
+        }));
+
+        try {
+          await waitForConnectedAccount(accountId, {
+            signal: controller.signal,
+          });
+          setBanner({
+            type: "success",
+            message:
+              "Connection verified. We've refreshed the list with the latest status.",
+          });
+        } catch (err) {
+          if (err instanceof DOMException && err.name === "AbortError") {
+            setBanner({
+              type: "error",
+              message:
+                "Verification cancelled. Try refreshing the connection again if needed.",
+            });
+          } else {
+            setBanner({
+              type: "error",
+              message:
+                err instanceof Error
+                  ? err.message
+                  : "We couldn't verify the connection. Please try again.",
+            });
+          }
+        } finally {
+          delete waitControllersRef.current[accountId];
+          clearPending();
+          closeAuthWindow();
+          startRefreshTransition(() => {
+            void loadConnections("refresh");
+          });
+        }
+
+        return;
+      }
+
+      if (bannerState) {
+        setBanner(bannerState);
+      }
+      clearPending();
+      closeAuthWindow();
+      startRefreshTransition(() => {
+        void loadConnections("refresh");
+      });
     },
-    [loadConnections, startRefreshTransition]
+    [closeAuthWindow, launchAuthWindow, loadConnections, startRefreshTransition]
   );
 
   const hasFiltersApplied = query.statuses.size > 0;
@@ -694,6 +833,8 @@ function ConnectedAccountsTable({
                     >
                       {pendingAction?.type === "refresh"
                         ? "Refreshing…"
+                        : pendingAction?.type === "wait"
+                        ? "Waiting for connection…"
                         : "Refresh"}
                     </Button>
                     <Button
