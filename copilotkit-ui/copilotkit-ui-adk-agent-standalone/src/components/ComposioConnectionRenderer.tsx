@@ -9,131 +9,15 @@ import type {
   ToolkitRetrieveResponse,
 } from "@composio/core";
 
-const STATUS_STYLES = {
-  SUCCESS: "bg-emerald-100 text-emerald-600",
-  FAILED: "bg-rose-100 text-rose-600",
-  ACTIVE: "bg-emerald-100 text-emerald-600",
-  INACTIVE: "bg-amber-100 text-amber-600",
-  INITIATED: "bg-indigo-100 text-indigo-600",
-  INITIALIZING: "bg-indigo-100 text-indigo-600",
-  PENDING: "bg-indigo-100 text-indigo-600",
-  EXPIRED: "bg-rose-100 text-rose-600",
-  default: "bg-indigo-100 text-indigo-600",
-} as const;
-
-function getConnectedAccountId(response: unknown): string | undefined {
-  if (!response || typeof response !== "object") {
-    return undefined;
-  }
-
-  const data = response as Record<string, unknown>;
-  const candidate =
-    data.connected_account_id ??
-    data.connectedAccountId ??
-    data.connected_account ??
-    data.connectedAccount ??
-    data.connection_id ??
-    data.connectionId ??
-    data.id;
-
-  if (typeof candidate === "string" && candidate.trim().length > 0) {
-    return candidate;
-  }
-
-  const nested =
-    (typeof data.connected_account === "object" &&
-      data.connected_account !== null &&
-      (data.connected_account as { id?: unknown }).id) ||
-    (typeof data.connectedAccount === "object" &&
-      data.connectedAccount !== null &&
-      (data.connectedAccount as { id?: unknown }).id);
-
-  return typeof nested === "string" && nested.trim().length > 0
-    ? nested
-    : undefined;
-}
-
-const ACCOUNT_NAME_CANDIDATE_KEYS = [
-  "account_email",
-  "account_name",
-  "account_username",
-  "account_display_name",
-  "email",
-  "name",
-  "username",
-  "login",
-  "user",
-  "user_name",
-] as const;
-
-function extractAccountFriendlyName(
-  account: ConnectedAccountRetrieveResponse | null | undefined
-): string | null {
-  const stateObject =
-    account && typeof account === "object"
-      ? (account as { state?: unknown }).state
-      : null;
-
-  if (!stateObject || typeof stateObject !== "object") {
-    return null;
-  }
-
-  const candidate =
-    "val" in stateObject && stateObject.val && typeof stateObject.val === "object"
-      ? (stateObject.val as Record<string, unknown>)
-      : null;
-
-  if (!candidate) {
-    return null;
-  }
-
-  for (const key of ACCOUNT_NAME_CANDIDATE_KEYS) {
-    const value = candidate[key];
-    if (typeof value === "string" && value.trim()) {
-      return value;
-    }
-  }
-
-  return null;
-}
-
-function getAccountUpdatedAt(
-  account: ConnectedAccountRetrieveResponse | null | undefined
-): string | null {
-  if (!account) {
-    return null;
-  }
-
-  if (typeof account.updatedAt === "string" && account.updatedAt.trim()) {
-    return account.updatedAt;
-  }
-
-  const legacyValue = (account as Record<string, unknown>)["updated_at"];
-
-  return typeof legacyValue === "string" && legacyValue.trim().length > 0
-    ? legacyValue
-    : null;
-}
-
-function formatToolkitNameFromSlug(slug?: string | null) {
-  if (!slug) {
-    return undefined;
-  }
-
-  return slug
-    .split(/[-_]/)
-    .filter(Boolean)
-    .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
-    .join(" ");
-}
-
-function formatStatus(status?: string) {
-  return status
-    ?.toLowerCase()
-    .split("_")
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(" ");
-}
+import { Button } from "@/components/Button";
+import {
+  CONNECTED_ACCOUNT_STATUS_STYLES,
+  extractAccountFriendlyName,
+  formatStatus,
+  formatToolkitNameFromSlug,
+  getAccountUpdatedAt,
+  getConnectedAccountId,
+} from "@/lib/composio/connectedAccount";
 
 type WaitForConnectionResponse = {
   connectedAccount?: ConnectedAccountRetrieveResponse;
@@ -321,8 +205,9 @@ export function ComposioConnectionContent(props: ComposioRenderProps) {
   const displayStatus =
     overrideStatus ?? connectedAccount?.status ?? response?.status;
   const statusBadgeClass =
-    STATUS_STYLES[displayStatus as keyof typeof STATUS_STYLES] ??
-    STATUS_STYLES.default;
+    CONNECTED_ACCOUNT_STATUS_STYLES[
+      displayStatus as keyof typeof CONNECTED_ACCOUNT_STATUS_STYLES
+    ] ?? CONNECTED_ACCOUNT_STATUS_STYLES.default;
   const humanReadableStatus = formatStatus(displayStatus);
   const hasActiveConnection =
     !isDeleted &&
@@ -806,48 +691,39 @@ export function ComposioConnectionContent(props: ComposioRenderProps) {
 
       {showPrimaryActions && response?.redirect_url && (
         <div className="mt-4 flex flex-col gap-2 sm:flex-row">
-          <button
-            type="button"
+          <Button
             onClick={handlePrimaryAction}
             disabled={primaryDisabled}
-            className="inline-flex w-full items-center justify-center rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-600 disabled:cursor-not-allowed disabled:opacity-75 sm:flex-1"
+            fullWidth
+            shape="rounded"
+            className="sm:flex-1"
           >
-            {isWaiting ? (
-              <span
-                aria-hidden="true"
-                className="mr-2 text-base leading-none text-indigo-100"
-              >
-                ⏳
-              </span>
-            ) : null}
+            {isWaiting ? <span aria-hidden>⏳</span> : null}
             {primaryLabel}
-          </button>
+          </Button>
           {isWaiting ? (
-            <button
-              type="button"
+            <Button
               onClick={handleCancelWait}
-              className="inline-flex w-full items-center justify-center rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-600 sm:flex-1"
+              variant="secondary"
+              fullWidth
+              shape="rounded"
+              className="sm:flex-1"
             >
               Cancel
-            </button>
+            </Button>
           ) : null}
           {hasActiveConnection ? (
-            <button
-              type="button"
+            <Button
               onClick={handleDelete}
               disabled={isDeleting || isRefreshing || isWaiting}
-              className="inline-flex w-full items-center justify-center rounded-lg border border-rose-200 bg-white px-4 py-2 text-sm font-medium text-rose-600 transition hover:bg-rose-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-rose-600 disabled:cursor-not-allowed disabled:opacity-75 sm:flex-1"
+              variant="destructive"
+              fullWidth
+              shape="rounded"
+              className="sm:flex-1"
             >
-              {isDeleting ? (
-                <span
-                  aria-hidden="true"
-                  className="mr-2 text-base leading-none text-rose-300"
-                >
-                  ⏳
-                </span>
-              ) : null}
+              {isDeleting ? <span aria-hidden>⏳</span> : null}
               Disconnect
-            </button>
+            </Button>
           ) : null}
         </div>
       )}

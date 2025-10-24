@@ -7,7 +7,12 @@ const nextConfig: NextConfig = {
         protocol: "https",
         hostname: "*.googleusercontent.com",
       },
+      {
+        protocol: "https",
+        hostname: "logos.composio.dev",
+      },
     ],
+    dangerouslyAllowSVG: true,
   },
 };
 

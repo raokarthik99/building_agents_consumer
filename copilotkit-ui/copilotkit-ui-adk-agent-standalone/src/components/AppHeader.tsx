@@ -3,9 +3,10 @@
 import { useMemo, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import type { User } from "@supabase/supabase-js";
 
+import { Button } from "@/components/Button";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
 type AppHeaderProps = {
@@ -17,6 +18,7 @@ export function AppHeader({ user }: AppHeaderProps) {
   const supabase = useMemo(() => getSupabaseBrowserClient(), []);
   const [isSigningOut, setIsSigningOut] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const pathname = usePathname();
 
   const displayName =
     (user?.user_metadata?.full_name as string | undefined) ||
@@ -52,16 +54,39 @@ export function AppHeader({ user }: AppHeaderProps) {
     }
   };
 
+  const navigation = [
+    { href: "/", label: "Chat" },
+    { href: "/connections", label: "Manage connections" },
+  ];
+
   return (
     <header className="sticky top-0 z-10 border-b border-slate-200 bg-white/70 backdrop-blur">
       <div className="flex w-full items-center justify-between gap-4 px-5 py-3 md:px-8">
-        <Link
-          href="/"
-          className="text-sm font-semibold text-slate-900 transition hover:text-slate-600"
-          aria-label="Agent Chat Workspace home"
-        >
-          Agent Chat Workspace
-        </Link>
+        <div className="flex items-center gap-6">
+          <Link
+            href="/"
+            className="text-sm font-semibold text-slate-900 transition hover:text-slate-600"
+            aria-label="Agent Chat Workspace home"
+          >
+            Agent Chat Workspace
+          </Link>
+          <nav className="hidden items-center gap-4 text-sm md:flex">
+            {navigation.map(({ href, label }) => {
+              const isActive =
+                pathname === href ||
+                (href !== "/" && pathname?.startsWith(href));
+              return (
+                <Link
+                  key={href}
+                  href={href}
+                  className={`font-medium transition ${isActive ? "text-slate-900" : "text-slate-500 hover:text-slate-900"}`}
+                >
+                  {label}
+                </Link>
+              );
+            })}
+          </nav>
+        </div>
         {user ? (
           <div className="flex flex-col items-end gap-2">
             <div className="flex items-center gap-4">
@@ -88,13 +113,15 @@ export function AppHeader({ user }: AppHeaderProps) {
                   <span className="text-xs text-slate-500">{user.email}</span>
                 </div>
               </div>
-              <button
+              <Button
                 onClick={handleSignOut}
                 disabled={isSigningOut}
-                className="rounded-full border border-slate-300 px-3 py-2 text-xs font-medium text-slate-600 transition hover:border-slate-400 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-70"
+                variant="secondary"
+                size="sm"
+                className="font-medium"
               >
                 {isSigningOut ? "Signing out…" : "Sign out"}
-              </button>
+              </Button>
             </div>
             {error && (
               <span className="text-xs text-red-600" role="alert">
