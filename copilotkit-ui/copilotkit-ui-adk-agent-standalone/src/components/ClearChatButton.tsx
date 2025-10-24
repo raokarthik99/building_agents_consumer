@@ -43,16 +43,17 @@ export function ClearChatButton() {
     <Button
       type="button"
       onClick={handleClear}
-      variant="secondary"
-      className="font-medium shadow-sm active:scale-[0.98]"
+      variant="ghost"
+      size="sm"
+      className="gap-1 font-normal text-slate-500 hover:text-slate-700"
       aria-label="Clear chat history"
       title={status === "success" ? "Chat cleared" : "Clear chat history"}
       disabled={isLoading}
     >
-      <span aria-hidden className="text-base leading-none">
+      <span aria-hidden className="text-sm leading-none">
         {status === "success" ? "✅" : "🧹"}
       </span>
-      <span aria-live="polite" className="text-slate-800">
+      <span aria-live="polite" className="text-xs font-medium">
         {status === "success" ? "Chat cleared!" : "Clear chat"}
       </span>
     </Button>

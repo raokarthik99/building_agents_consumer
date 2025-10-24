@@ -7,14 +7,14 @@ import { ToolCallDetailsRenderer } from "@/components/ToolCallDetailsRenderer";
 
 export function ChatClient() {
   return (
-    <div className="flex flex-1 min-h-0 flex-col gap-4 overflow-hidden px-5 py-6 md:px-8">
+    <div className="flex flex-1 min-h-0 flex-col gap-0.5 overflow-hidden px-2 py-1 md:px-3">
       <div className="flex-shrink-0">
         <ToolCallDetailsRenderer />
       </div>
       <div className="flex items-center justify-end flex-shrink-0">
         <ClearChatButton />
       </div>
-      <div className="flex flex-1 min-h-0 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+      <div className="flex flex-1 min-h-0 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
         <CopilotChat
           labels={{
             title: "Your Assistant",
