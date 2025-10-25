@@ -73,7 +73,9 @@ export function extractAccountFriendlyName(
   }
 
   const candidate =
-    "val" in stateObject && stateObject.val && typeof stateObject.val === "object"
+    "val" in stateObject &&
+    stateObject.val &&
+    typeof stateObject.val === "object"
       ? (stateObject.val as Record<string, unknown>)
       : null;
 
@@ -92,7 +94,10 @@ export function extractAccountFriendlyName(
 }
 
 export function getAccountUpdatedAt(
-  account: Pick<ConnectedAccountRetrieveResponse, "updatedAt"> | null | undefined
+  account:
+    | Pick<ConnectedAccountRetrieveResponse, "updatedAt">
+    | null
+    | undefined
 ): string | null {
   if (!account) {
     return null;
@@ -131,16 +136,10 @@ export function formatStatus(status?: string) {
 
 type AccountLike =
   | Partial<
-      Pick<
-        ConnectedAccountRetrieveResponse,
-        "id" | "userId" | "authConfig" | "state"
-      >
+      Pick<ConnectedAccountRetrieveResponse, "id" | "authConfig" | "state">
     >
   | Partial<
-      Pick<
-        ConnectedAccountListResponseItem,
-        "id" | "userId" | "authConfig" | "state"
-      >
+      Pick<ConnectedAccountListResponseItem, "id" | "authConfig" | "state">
     >;
 
 export function getAccountDisplayName(
@@ -155,7 +154,13 @@ export function getAccountDisplayName(
     return friendly;
   }
 
-  const authName = getNonEmptyString(account?.authConfig?.name);
+  const authName = getNonEmptyString(
+    account?.authConfig &&
+      typeof account.authConfig === "object" &&
+      "name" in account.authConfig
+      ? (account.authConfig as { name?: unknown }).name
+      : undefined
+  );
   if (authName) {
     return authName;
   }
@@ -164,7 +169,11 @@ export function getAccountDisplayName(
     return fallbackLabel;
   }
 
-  const userId = getNonEmptyString((account as { userId?: unknown })?.userId);
+  const userId = getNonEmptyString(
+    account && typeof account === "object" && "userId" in account
+      ? (account as { userId?: unknown }).userId
+      : undefined
+  );
   if (userId) {
     return `User ${shortenIdentifier(userId)}`;
   }

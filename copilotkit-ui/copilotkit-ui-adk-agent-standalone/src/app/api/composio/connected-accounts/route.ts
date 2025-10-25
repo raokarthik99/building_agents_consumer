@@ -68,7 +68,10 @@ export async function GET(req: NextRequest) {
     const values = params
       .getAll(key)
       .map(parseSearchParamValue)
-      .filter((value): value is Exclude<unknown, undefined | null> => value !== undefined && value !== null);
+      .filter(
+        (value): value is Exclude<unknown, undefined | null> =>
+          value !== undefined && value !== null
+      );
 
     if (!values.length) {
       continue;
@@ -84,7 +87,10 @@ export async function GET(req: NextRequest) {
       Object.keys(query).length ? query : undefined
     );
 
-    const toolkitBySlug: Record<string, ToolkitRetrieveResponse> = {};
+    const toolkitBySlug: Record<
+      string,
+      ToolkitRetrieveResponse | { slug: string }
+    > = {};
     const slugsToHydrate = new Set<string>();
 
     for (const item of connectedAccounts.items ?? []) {
@@ -101,7 +107,12 @@ export async function GET(req: NextRequest) {
       }
 
       const hasLogo =
-        item.toolkit?.meta?.logo &&
+        item.toolkit &&
+        "meta" in item.toolkit &&
+        item.toolkit.meta &&
+        typeof item.toolkit.meta === "object" &&
+        "logo" in item.toolkit.meta &&
+        item.toolkit.meta.logo &&
         typeof item.toolkit.meta.logo === "string" &&
         item.toolkit.meta.logo.trim().length > 0;
 
@@ -114,7 +125,12 @@ export async function GET(req: NextRequest) {
       Array.from(slugsToHydrate, async (slug) => {
         const existing = toolkitBySlug[slug];
         const hasLogoAlready =
-          existing?.meta?.logo &&
+          existing &&
+          "meta" in existing &&
+          existing.meta &&
+          typeof existing.meta === "object" &&
+          "logo" in existing.meta &&
+          existing.meta.logo &&
           typeof existing.meta.logo === "string" &&
           existing.meta.logo.trim().length > 0;
 
