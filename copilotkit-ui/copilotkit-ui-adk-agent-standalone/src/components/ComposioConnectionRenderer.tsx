@@ -21,6 +21,7 @@ import {
 } from "@/lib/composio/connectedAccount";
 import { closeAuthPopup, openAuthPopup } from "@/lib/composio/authPopup";
 import { waitForConnectedAccount } from "@/lib/composio/waitForConnection";
+import { useDisconnectConfirmation } from "@/lib/hooks/useDisconnectConfirmation";
 
 type ComposioRenderProps = Pick<
   CatchAllActionRenderProps,
@@ -57,6 +58,7 @@ export function ComposioConnectionContent(props: ComposioRenderProps) {
   const { appendMessage } = useCopilotChat();
   const shouldAutoContinueRef = useRef<boolean>(false);
   const autoContinueSentForRef = useRef<string | null>(null);
+  const { confirmDisconnect } = useDisconnectConfirmation();
 
   const closeAuthWindow = useCallback(() => {
     closeAuthPopup(authWindowRef);
@@ -312,8 +314,7 @@ export function ComposioConnectionContent(props: ComposioRenderProps) {
         typeof refreshedStatusValue === "string"
           ? refreshedStatusValue
           : undefined;
-      const redirectValue = (refreshed as Record<string, unknown>)
-        .redirect_url;
+      const redirectValue = (refreshed as Record<string, unknown>).redirect_url;
       const redirectUrl =
         typeof redirectValue === "string" && redirectValue.trim().length > 0
           ? redirectValue.trim()
@@ -345,9 +346,7 @@ export function ComposioConnectionContent(props: ComposioRenderProps) {
       void handleWaitForConnection();
     } catch (err) {
       setWaitError(
-        err instanceof Error
-          ? err.message
-          : "Unable to refresh the connection."
+        err instanceof Error ? err.message : "Unable to refresh the connection."
       );
     } finally {
       setIsRefreshing(false);
@@ -363,6 +362,11 @@ export function ComposioConnectionContent(props: ComposioRenderProps) {
 
   const handleDelete = useCallback(async () => {
     if (!connectedAccountId || isDeleting || isRefreshing || isWaiting) {
+      return;
+    }
+
+    const { confirmed } = confirmDisconnect();
+    if (!confirmed) {
       return;
     }
 
@@ -407,9 +411,7 @@ export function ComposioConnectionContent(props: ComposioRenderProps) {
       }
     } catch (err) {
       setWaitError(
-        err instanceof Error
-          ? err.message
-          : "Unable to disconnect the account."
+        err instanceof Error ? err.message : "Unable to disconnect the account."
       );
     } finally {
       setIsDeleting(false);
@@ -421,6 +423,7 @@ export function ComposioConnectionContent(props: ComposioRenderProps) {
     isRefreshing,
     isWaiting,
     waitController,
+    confirmDisconnect,
   ]);
 
   const handlePrimaryAction = useCallback(() => {
@@ -553,8 +556,7 @@ export function ComposioConnectionContent(props: ComposioRenderProps) {
     ? "Check connection"
     : "Connect & Verify";
   const primaryDisabled = isWaiting || isRefreshing || isDeleting;
-  const showPrimaryActions =
-    !isDeleted && Boolean(connectedAccountId);
+  const showPrimaryActions = !isDeleted && Boolean(connectedAccountId);
   const showAuthInstructions = showPrimaryActions && !hasActiveConnection;
   const showActiveInstructions = showPrimaryActions && hasActiveConnection;
   let instructionMessage: string | null = null;
@@ -602,7 +604,8 @@ export function ComposioConnectionContent(props: ComposioRenderProps) {
         <p className="text-sm text-rose-500">
           {error?.message ??
             "Try again in a moment, or reach out to support if this keeps happening."}{" "}
-          If the problem persists, ask me to retry the connection so you receive a fresh authorization link.
+          If the problem persists, ask me to retry the connection so you receive
+          a fresh authorization link.
         </p>
       </div>
     );
@@ -637,7 +640,9 @@ export function ComposioConnectionContent(props: ComposioRenderProps) {
               </span>
             ) : null}
             {isDetailsLoading ? (
-              <span className="text-xs text-slate-400">Refreshing details…</span>
+              <span className="text-xs text-slate-400">
+                Refreshing details…
+              </span>
             ) : null}
           </div>
           {toolkitDescription ? (

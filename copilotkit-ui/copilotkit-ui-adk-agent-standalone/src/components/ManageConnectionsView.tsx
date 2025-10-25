@@ -20,6 +20,7 @@ import {
 } from "@/lib/composio/connectedAccount";
 import { closeAuthPopup, openAuthPopup } from "@/lib/composio/authPopup";
 import { waitForConnectedAccount } from "@/lib/composio/waitForConnection";
+import { useDisconnectConfirmation } from "@/lib/hooks/useDisconnectConfirmation";
 
 type ConnectedAccountsResponse = {
   connectedAccounts?: {
@@ -97,6 +98,7 @@ export function ManageConnectionsView() {
   const hasLoadedRef = useRef(false);
   const authWindowRef = useRef<Window | null>(null);
   const waitControllersRef = useRef<Record<string, AbortController>>({});
+  const { confirmDisconnect } = useDisconnectConfirmation();
 
   const closeAuthWindow = useCallback(() => {
     closeAuthPopup(authWindowRef);
@@ -164,6 +166,13 @@ export function ManageConnectionsView() {
     },
     [query.cursor, query.orderBy, query.statuses]
   );
+
+  const refreshConnections = useCallback(() => {
+    setBanner(null);
+    startRefreshTransition(() => {
+      void loadConnections("refresh");
+    });
+  }, [loadConnections, startRefreshTransition]);
 
   useEffect(() => {
     const mode = hasLoadedRef.current ? "refresh" : "initial";
@@ -405,9 +414,7 @@ export function ManageConnectionsView() {
           delete waitControllersRef.current[accountId];
           clearPending();
           closeAuthWindow();
-          startRefreshTransition(() => {
-            void loadConnections("refresh");
-          });
+          refreshConnections();
         }
 
         return;
@@ -418,11 +425,9 @@ export function ManageConnectionsView() {
       }
       clearPending();
       closeAuthWindow();
-      startRefreshTransition(() => {
-        void loadConnections("refresh");
-      });
+      refreshConnections();
     },
-    [closeAuthWindow, launchAuthWindow, loadConnections, startRefreshTransition]
+    [closeAuthWindow, launchAuthWindow, refreshConnections]
   );
 
   const hasFiltersApplied = query.statuses.size > 0;
@@ -438,12 +443,7 @@ export function ManageConnectionsView() {
             </h1>
           </div>
           <Button
-            onClick={() => {
-              setBanner(null);
-              startRefreshTransition(() => {
-                void loadConnections("refresh");
-              });
-            }}
+            onClick={refreshConnections}
             disabled={status === "loading" || isRefreshingList}
             variant="secondary"
             size="sm"
@@ -494,15 +494,7 @@ export function ManageConnectionsView() {
             {!hasLoadedConnections ? (
               <LoadingState />
             ) : error ? (
-              <ErrorState
-                message={error}
-                onRetry={() => {
-                  setBanner(null);
-                  startRefreshTransition(() => {
-                    void loadConnections("refresh");
-                  });
-                }}
-              />
+              <ErrorState message={error} onRetry={refreshConnections} />
             ) : showEmptyState ? (
               <EmptyState hasFiltersApplied={hasFiltersApplied} />
             ) : (
@@ -511,6 +503,7 @@ export function ManageConnectionsView() {
                 toolkits={toolkits}
                 pendingActions={pendingActions}
                 onAction={triggerAction}
+                confirmDisconnect={confirmDisconnect}
               />
             )}
           </div>
@@ -659,16 +652,102 @@ function EmptyState({ hasFiltersApplied }: { hasFiltersApplied: boolean }) {
   );
 }
 
+type ConnectionData = {
+  accountId: string | null;
+  toolkitName: string;
+  logoUrl: string | null;
+  initials: string;
+  accountName: string;
+  secondaryLabel: string | null;
+  statusClass: string;
+  statusLabel: string;
+  updatedAt: { absolute: string; relative: string } | null;
+  isDisabled: boolean;
+  pendingAction: { type: PendingAccountAction } | undefined;
+};
+
+function extractConnectionData(
+  connection: ConnectedAccountListResponseItem,
+  toolkits: Record<string, ToolkitRetrieveResponse>,
+  pendingActions: AccountActionState
+): ConnectionData {
+  const accountId = getConnectedAccountId(connection) ?? connection.id ?? null;
+  const slug =
+    connection.toolkit?.slug ??
+    ((connection as Record<string, unknown>).toolkitSlug as
+      | string
+      | undefined) ??
+    null;
+  const resolvedToolkit = slug
+    ? toolkits[slug] ?? connection.toolkit ?? null
+    : connection.toolkit ?? null;
+  const resolvedToolkitName = isToolkitLike(resolvedToolkit)
+    ? asNonEmptyString(resolvedToolkit.name)
+    : null;
+  const toolkitName =
+    resolvedToolkitName ?? formatToolkitNameFromSlug(slug) ?? "Unknown toolkit";
+  const logoUrl = isToolkitLike(resolvedToolkit)
+    ? getToolkitLogo(resolvedToolkit.meta?.logo)
+    : null;
+  const initials = toolkitName
+    .split(" ")
+    .map((segment: string) => segment[0] ?? "")
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
+
+  const fallbackName = toolkitName ? `${toolkitName} account` : undefined;
+  const accountName = getAccountDisplayName(connection, fallbackName);
+  const userId = asNonEmptyString((connection as { userId?: unknown }).userId);
+  const shortUserId = userId ? shortenIdentifier(userId) : null;
+  const shortAccountId = accountId ? shortenIdentifier(accountId) : null;
+  const accountType = asNonEmptyString(
+    ((connection as { authConfig?: { type?: unknown } }).authConfig?.type ??
+      null) as string | null
+  );
+  const secondaryLabel = shortUserId
+    ? `User ${shortUserId}`
+    : shortAccountId
+    ? `ID ${shortAccountId}`
+    : accountType
+    ? humanizeEnumeration(accountType)
+    : null;
+  const statusClass =
+    CONNECTED_ACCOUNT_STATUS_STYLES[
+      connection.status as keyof typeof CONNECTED_ACCOUNT_STATUS_STYLES
+    ] ?? CONNECTED_ACCOUNT_STATUS_STYLES.default;
+  const statusLabel = formatStatus(connection.status) ?? "Unknown";
+  const updatedAt = formatUpdatedMetadata(getAccountUpdatedAt(connection));
+  const isDisabled = connection.isDisabled;
+  const pendingAction = accountId ? pendingActions[accountId] : undefined;
+
+  return {
+    accountId,
+    toolkitName,
+    logoUrl,
+    initials,
+    accountName,
+    secondaryLabel,
+    statusClass,
+    statusLabel,
+    updatedAt,
+    isDisabled,
+    pendingAction,
+  };
+}
+
 function ConnectedAccountsTable({
   connections,
   toolkits,
   pendingActions,
   onAction,
+  confirmDisconnect,
 }: {
   connections: ConnectedAccountListResponseItem[];
   toolkits: Record<string, ToolkitRetrieveResponse>;
   pendingActions: AccountActionState;
   onAction: (accountId: string, action: AccountAction) => Promise<void>;
+  confirmDisconnect: () => { confirmed: boolean; message?: string };
 }) {
   return (
     <div className="overflow-x-auto">
@@ -686,137 +765,70 @@ function ConnectedAccountsTable({
         </thead>
         <tbody>
           {connections.map((connection, index) => {
-            const accountId =
-              getConnectedAccountId(connection) ?? connection.id ?? null;
-            const slug =
-              connection.toolkit?.slug ??
-              ((connection as Record<string, unknown>).toolkitSlug as
-                | string
-                | undefined) ??
-              null;
-            const resolvedToolkit = slug
-              ? toolkits[slug] ?? connection.toolkit ?? null
-              : connection.toolkit ?? null;
-            const resolvedToolkitName = isToolkitLike(resolvedToolkit)
-              ? asNonEmptyString(resolvedToolkit.name)
-              : null;
-            const toolkitName =
-              resolvedToolkitName ??
-              formatToolkitNameFromSlug(slug) ??
-              "Unknown toolkit";
-            const logoUrl = isToolkitLike(resolvedToolkit)
-              ? getToolkitLogo(resolvedToolkit.meta?.logo)
-              : null;
-            const initials = toolkitName
-              .split(" ")
-              .map((segment: string) => segment[0] ?? "")
-              .join("")
-              .slice(0, 2)
-              .toUpperCase();
-            const slugMatchesName =
-              slug &&
-              toolkitName &&
-              slug.replace(/[-_]/g, " ").toLowerCase() ===
-                toolkitName.toLowerCase();
-            const showSlug = Boolean(slug && !slugMatchesName);
-            const fallbackName = toolkitName
-              ? `${toolkitName} account`
-              : undefined;
-            const accountName = getAccountDisplayName(connection, fallbackName);
-            const userId = asNonEmptyString(
-              (connection as { userId?: unknown }).userId
+            const connectionData = extractConnectionData(
+              connection,
+              toolkits,
+              pendingActions
             );
-            const shortUserId = userId ? shortenIdentifier(userId) : null;
-            const shortAccountId = accountId
-              ? shortenIdentifier(accountId)
-              : null;
-            const accountType = asNonEmptyString(
-              ((connection as { authConfig?: { type?: unknown } }).authConfig
-                ?.type ?? null) as string | null
-            );
-            const secondaryLabel = shortUserId
-              ? `User ${shortUserId}`
-              : shortAccountId
-              ? `ID ${shortAccountId}`
-              : accountType
-              ? humanizeEnumeration(accountType)
-              : null;
-            const statusClass =
-              CONNECTED_ACCOUNT_STATUS_STYLES[
-                connection.status as keyof typeof CONNECTED_ACCOUNT_STATUS_STYLES
-              ] ?? CONNECTED_ACCOUNT_STATUS_STYLES.default;
-            const statusLabel = formatStatus(connection.status) ?? "Unknown";
-            const updatedAt = formatUpdatedMetadata(
-              getAccountUpdatedAt(connection)
-            );
-            const isDisabled = connection.isDisabled;
-            const pendingAction = accountId
-              ? pendingActions[accountId]
-              : undefined;
 
             return (
               <tr
-                key={accountId ?? `connection-${index}`}
+                key={connectionData.accountId ?? `connection-${index}`}
                 className="border-b border-slate-100 last:border-0"
               >
                 <td className="px-3 py-3">
                   <div className="flex items-center gap-3">
                     <div className="relative h-9 w-9 overflow-hidden rounded-full border border-slate-200 bg-slate-100">
-                      {logoUrl ? (
+                      {connectionData.logoUrl ? (
                         <Image
-                          src={logoUrl}
-                          alt={toolkitName}
+                          src={connectionData.logoUrl}
+                          alt={connectionData.toolkitName}
                           fill
                           sizes="36px"
                           className="object-cover"
                         />
                       ) : (
                         <span className="flex h-full w-full items-center justify-center text-xs font-semibold text-slate-500">
-                          {initials || "TK"}
+                          {connectionData.initials || "TK"}
                         </span>
                       )}
                     </div>
                     <div className="min-w-0">
                       <div className="truncate font-medium text-slate-900">
-                        {toolkitName}
+                        {connectionData.toolkitName}
                       </div>
-                      {showSlug && (
-                        <div className="truncate text-[11px] uppercase tracking-wide text-slate-400">
-                          {slug}
-                        </div>
-                      )}
                     </div>
                   </div>
                 </td>
                 <td className="px-3 py-3">
                   <div className="flex flex-col">
                     <span className="truncate font-medium text-slate-700">
-                      {accountName}
+                      {connectionData.accountName}
                     </span>
-                    {secondaryLabel && (
+                    {connectionData.secondaryLabel && (
                       <span className="truncate text-xs text-slate-400">
-                        {secondaryLabel}
+                        {connectionData.secondaryLabel}
                       </span>
                     )}
                   </div>
                 </td>
                 <td className="px-3 py-3">
                   <span
-                    className={`${statusClass} inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-wide`}
+                    className={`${connectionData.statusClass} inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-wide`}
                   >
-                    {statusLabel}
+                    {connectionData.statusLabel}
                   </span>
-                  {isDisabled && (
+                  {connectionData.isDisabled && (
                     <span className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-600">
                       Disabled
                     </span>
                   )}
                 </td>
                 <td className="px-3 py-3">
-                  {updatedAt ? (
+                  {connectionData.updatedAt ? (
                     <div className="flex flex-col text-xs text-slate-500">
-                      <span>{updatedAt.absolute}</span>
-                      <span>{updatedAt.relative}</span>
+                      <span>{connectionData.updatedAt.absolute}</span>
+                      <span>{connectionData.updatedAt.relative}</span>
                     </div>
                   ) : (
                     <span className="text-xs text-slate-400">—</span>
@@ -826,36 +838,40 @@ function ConnectedAccountsTable({
                   <div className="flex justify-end gap-2">
                     <Button
                       onClick={() =>
-                        accountId && onAction(accountId, "refresh")
+                        connectionData.accountId &&
+                        onAction(connectionData.accountId, "refresh")
                       }
-                      disabled={!accountId || Boolean(pendingAction)}
+                      disabled={
+                        !connectionData.accountId ||
+                        Boolean(connectionData.pendingAction)
+                      }
                       size="sm"
                     >
-                      {pendingAction?.type === "refresh"
+                      {connectionData.pendingAction?.type === "refresh"
                         ? "Refreshing…"
-                        : pendingAction?.type === "wait"
+                        : connectionData.pendingAction?.type === "wait"
                         ? "Waiting for connection…"
                         : "Refresh"}
                     </Button>
                     <Button
                       onClick={() => {
-                        if (!accountId) {
+                        if (!connectionData.accountId) {
                           return;
                         }
-                        const shouldDelete =
-                          window.confirm(
-                            "Disconnect this account? This action cannot be undone."
-                          ) ?? false;
-                        if (!shouldDelete) {
+                        const { confirmed } = confirmDisconnect();
+                        if (!confirmed) {
                           return;
                         }
-                        void onAction(accountId, "delete");
+                        void onAction(connectionData.accountId, "delete");
                       }}
-                      disabled={!accountId || Boolean(pendingAction)}
+                      disabled={
+                        !connectionData.accountId ||
+                        Boolean(connectionData.pendingAction)
+                      }
                       variant="destructive"
                       size="sm"
                     >
-                      {pendingAction?.type === "delete"
+                      {connectionData.pendingAction?.type === "delete"
                         ? "Disconnecting…"
                         : "Disconnect"}
                     </Button>
