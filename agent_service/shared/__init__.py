@@ -8,12 +8,15 @@ implementations.
 
 from .app_factory import create_app
 from .env import require_env, resolve_required_pair
+from .model_provider import resolve_adk_model, resolve_model_provider
 from .settings import SupabaseAuthSettings, load_supabase_auth_settings
 
 __all__ = [
     "create_app",
     "require_env",
     "resolve_required_pair",
+    "resolve_adk_model",
+    "resolve_model_provider",
     "SupabaseAuthSettings",
     "load_supabase_auth_settings",
 ]

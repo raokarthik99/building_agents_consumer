@@ -1,17 +1,15 @@
 import logging
-import os
-
 from ag_ui_adk import ADKAgent, add_adk_fastapi_endpoint
 from dotenv import load_dotenv
 from fastapi import FastAPI
 from google.adk.agents import Agent
-from google.adk.models.lite_llm import LiteLlm
 
 
 from shared.auth import get_supabase_user_id
 from shared.composio_mcp import ComposioMCPIntegration, ComposioMCPSettings
 from shared.tool_response_utils import normalize_mcp_tool_response_payload
 from shared.env import require_env, require_env_with_fallback
+from shared.model_provider import resolve_adk_model
 
 load_dotenv()
 
@@ -49,28 +47,6 @@ _MODEL_IDENTIFIER = require_env_with_fallback(
     context=AGENT_CONTEXT,
 )
 
-
-def _resolve_model_provider() -> str:
-    provider = os.getenv(_MODEL_PROVIDER_ENV)
-    if provider:
-        trimmed = provider.strip()
-        if trimmed:
-            return trimmed.upper()
-    default_provider = os.getenv(_DEFAULT_MODEL_PROVIDER_ENV)
-    if default_provider:
-        trimmed = default_provider.strip()
-        if trimmed:
-            return trimmed.upper()
-    return "LITELLM"
-
-
-def _resolve_model():
-    provider = _resolve_model_provider()
-    if provider == "GOOGLE":
-        return _MODEL_IDENTIFIER
-    return LiteLlm(model=_MODEL_IDENTIFIER)
-
-
 def register_agent(app: FastAPI, base_path: str) -> None:
     """
     Attach the agent's FastAPI routes under the provided base path.
@@ -91,7 +67,11 @@ def _build_adk_agent() -> ADKAgent:
 def get_root_agent() -> Agent:
     return Agent(
         name=AGENT_INTERNAL_NAME,
-        model=_resolve_model(),
+        model=resolve_adk_model(
+            _MODEL_IDENTIFIER,
+            _MODEL_PROVIDER_ENV,
+            _DEFAULT_MODEL_PROVIDER_ENV,
+        ),
         description="Agent specialized in managing GitHub issues workflows.",
         instruction=AGENT_INSTRUCTION,
         before_agent_callback=composio_integration.before_agent_callback,
