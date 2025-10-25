@@ -33,6 +33,8 @@ export default async function RootLayout({
             agent="github-issues"
             headers={copilotHeaders}
             properties={copilotProperties}
+            publicLicenseKey={process.env.COPILOTKIT_PUBLIC_LICENSE_KEY}
+            showDevConsole={process.env.NODE_ENV === "development"}
           >
             <main className="flex flex-1 min-h-0 flex-col overflow-hidden">
               {children}
