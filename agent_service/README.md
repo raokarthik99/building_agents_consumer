@@ -1,216 +1,199 @@
 # Agent Service
 
+## Overview
+
 Agent Service is a FastAPI gateway that mounts one or more AI agents behind a
-single authenticated HTTP surface. Shared infrastructure (auth, discovery,
-app wiring) lives in `shared/`, while individual agents provide their own ADK
-logic under `agents/`.
+single authenticated HTTP surface. Shared infrastructure (authentication,
+configuration, discovery, orchestration) lives in `shared/`, while each agent is
+implemented in its own subpackage under `agents/`.
 
-- **Gateway**: FastAPI application factory with Supabase-backed JWT enforcement.
-- **Agents**: Google ADK agents that can opt in to Composio MCP toolsets.
-- **Discovery**: Agents auto-register via `shared.agent_loader.discover_agents`.
+### Highlights
+- FastAPI application factory with Supabase-backed JWT enforcement.
+- Dynamic agent discovery: drop a directory with an `agent.py`, restart, and the
+  routes mount automatically.
+- Optional Composio MCP toolsets that inject on demand and clean up safely.
+- Google ADK integration for authoring agents with LiteLLM or native Gemini
+  models.
+- Introspectable registry via `app.state.agent_registry` for surfacing available
+  agents.
 
----
+## Repository Layout
+- `app.py` — application entry point; calls `shared.create_app` and starts
+  Uvicorn when executed directly.
+- `shared/` — shared infrastructure (authentication middleware, environment
+  helpers, Composio wiring, agent discovery, settings).
+- `agents/` — one subdirectory per agent; each exposes `register_agent(app,
+  base_path)`.
+- `requirements.txt` / `requirements.lock` — dependency spec and lockfile.
+- `.env.example` files (copy locally) provide configuration templates for the
+  gateway and individual agents.
 
-## Architecture at a Glance
+## Prerequisites
+- Python **3.13.1** (pinned by `.python-version`).
+- Supabase project for issuing JWTs and validating users.
+- API keys for any model providers you plan to use (Google Gemini, LiteLLM
+  bridge targets such as Anthropic/OpenAI, etc.).
+- Composio account if you enable MCP tools.
 
-- `app.py` – entry point that builds the FastAPI app with `shared.create_app`.
-- `shared/` – authentication middleware, environment helpers, Composio MCP
-  integration, and agent discovery.
-- `agents/` – one subpackage per agent; each exposes `register_agent(app, base_path)`.
-- `/healthz` – unauthenticated readiness probe.
-- `app.state.agent_registry` – runtime metadata describing mounted agents.
-
----
-
-## Local Development Workflow
-
+## Quickstart
 1. **Match the Python runtime**
+   ```bash
+   pyenv install 3.13.1     # run once
+   pyenv local 3.13.1       # optional; ensures `python` resolves correctly
+   python --version         # should report 3.13.1
+   ```
 
-   The repository pins `3.13.1` in `.python-version`. If you use `pyenv`,
-   run `pyenv install 3.13.1` (once) so `python` resolves to the correct interpreter.
-   Otherwise make sure `python --version` reports `3.13.1` before continuing.
-
-1. **Create and activate a virtual environment**
-
+2. **Create an isolated environment**
    ```bash
    python -m venv .venv
    source .venv/bin/activate
    ```
 
-1. **Install dependencies**
-
+3. **Install dependencies**
    ```bash
    pip install --upgrade pip
    pip install -r requirements.lock
    ```
+   If you modify dependencies, reinstall from `requirements.txt` and regenerate
+   the lockfile with `pip freeze --exclude-editable > requirements.lock`.
 
-   `requirements.txt` keeps the high-level dependency list. When you add or
-   upgrade packages, reinstall from `requirements.txt`, then regenerate the lock:
+4. **Configure environment variables**
+   - Copy the shared template: `cp .env.example .env` and populate secrets for
+     Supabase, model defaults, Composio, etc.
+   - Optionally create per-agent `.env` files (for example
+     `agents/github_issues_agent/.env`) to capture overrides that should not live
+     in source control.
 
+5. **Run the gateway**
    ```bash
-   pip install -r requirements.txt
-   pip freeze --exclude-editable > requirements.lock
+   source .venv/bin/activate
+   python app.py
    ```
+   By default the service listens on `http://0.0.0.0:8000`. Autodiscovered agent
+   routes mount beneath `/<AGENT_ROUTE_PREFIX>/<slug>` (defaults to `/agents`).
 
-### Updating dependencies
-
-1. Activate a clean virtual environment for this project (`source .venv/bin/activate`). If you need a fresh start, remove and recreate `.venv` before proceeding.
-1. Edit `requirements.txt` with the new or updated packages you want to add. Remove entries you no longer need.
-1. Install the resolved set to make sure the environment matches the spec:
-
-   ```bash
-   pip install --upgrade pip
-   pip install -r requirements.txt
-   ```
-
-   If you removed packages, uninstall them (`pip uninstall <package>`) or rebuild the virtualenv so they do not linger.
-
-1. Regenerate the lockfile from the now-canonical environment:
-
-   ```bash
-   pip freeze --exclude-editable > requirements.lock
-   ```
-
-1. Run your usual test smoke (for example `python app.py` plus the `/healthz` check below) to confirm nothing regressed.
-1. Commit `requirements.txt` and `requirements.lock` together so reviewers can see the intended upgrade.
-
-1. **Configure environment**
-
-   - Copy `cp .env.example .env` and populate the shared variables with project-specific secrets. This file is git-ignored—keep it private.
-   - For each agent, copy its example (`cp agents/github_issues_agent/.env.example agents/github_issues_agent/.env`) and tailor the overrides as needed.
-     > **Security:** Keep only the `.example` templates in source control. Never commit populated `.env*` files—they typically contain credentials.
-
-1. **Run the service** (or explore via ADK Web)
-
-   - From the project root (`agent_service/`), start the FastAPI gateway:
-
-     ```bash
-     python app.py
-     ```
-
-     The API binds to `http://0.0.0.0:8000`. Agents mount under
-     `/<AGENT_ROUTE_PREFIX>/<slug>`; inspect `app.state.agent_registry` for the
-     full listing.
-
-   - To launch the Google ADK playground instead, first move into the agents
-     directory so ADK can resolve your agent packages:
-
-     ```bash
-     cd agents
-     adk web
-     ```
-
-     Supabase authentication is bypassed in this playground, so reserve it for
-     local/manual validation. For production frontends and deployment, continue
-     using the CopilotKit ADK wrapper exposed through `app.py`.
-
-1. **Smoke test**
-   - `curl http://localhost:8000/healthz`
-   - Hit an agent route with an authenticated request to ensure Supabase checks succeed.
-
----
+### Managing Dependencies
+1. Activate a clean virtualenv (`source .venv/bin/activate`).
+2. Edit `requirements.txt` to add/remove packages.
+3. Install the resolved set: `pip install -r requirements.txt`.
+4. Regenerate the lockfile: `pip freeze --exclude-editable > requirements.lock`.
+5. Run your smoke tests (e.g., `python app.py` and `/healthz`) before committing
+   both files together.
 
 ## Configuration
 
-### Shared Infrastructure
+### Shared Environment Variables
 
-| Variable                      | Required | Description                                                                            | Default         |
-| ----------------------------- | -------- | -------------------------------------------------------------------------------------- | --------------- |
-| `DEFAULT_MODEL_PROVIDER`      | no       | Shared fallback provider (`GOOGLE`, `LITELLM`, etc.) used when agents do not override. | —               |
-| `DEFAULT_MODEL`               | no       | Shared fallback model identifier used when agents do not override.                     | —               |
-| `SUPABASE_URL`                | yes      | Supabase project Base URL used for auth.                                               | —               |
-| `SUPABASE_API_KEY`            | no       | Supabase service_role key for `/auth/v1/user`.                                         | —               |
-| `SUPABASE_JWT_SECRET`         | yes      | Supabase (Legacy) JWT secret used to validate HS256 tokens.                            | —               |
-| `SUPABASE_JWT_AUDIENCE`       | no       | Comma-separated list of accepted audiences.                                            | —               |
-| `SUPABASE_JWT_ISSUER`         | no       | Overrides expected `iss` claim. Defaults to `${SUPABASE_URL}/auth/v1`.                 | derived         |
-| `SUPABASE_AUTH_EXCLUDE_PATHS` | no       | Comma-separated list of paths that bypass auth.                                        | `/healthz`      |
-| `SUPABASE_AUTH_HTTP_TIMEOUT`  | no       | Timeout (seconds) for Supabase lookups.                                                | `3.0`           |
-| `GOOGLE_GENAI_USE_VERTEXAI`   | no       | Set to `true` to route Google Generative AI requests through Vertex AI.                | `false`         |
-| `GOOGLE_API_KEY`              | yes      | Google Generative AI API key used by shared tooling.                                   | —               |
-| `ANTHROPIC_API_KEY`           | no       | Anthropic API key for Claude-powered helpers.                                          | —               |
-| `COMPOSIO_API_KEY`            | yes      | API key used to request Composio MCP sessions.                                         | —               |
-| `AGENT_ROUTE_PREFIX`          | no       | Prefix applied to all agent mounts.                                                    | `/agents`       |
-| `AGENT_APP_TITLE`             | no       | FastAPI application title.                                                             | `Agent Gateway` |
-| `AGENT_APP_DESCRIPTION`       | no       | Optional FastAPI description text.                                                     | —               |
-| `LOG_LEVEL`                   | no       | Python logging level (e.g. `INFO`, `DEBUG`).                                           | `INFO`          |
-| `HOST`                        | no       | Hostname bound by Uvicorn when running via `python app.py`.                            | `0.0.0.0`       |
-| `PORT`                        | no       | TCP port bound by Uvicorn.                                                             | `8000`          |
-| `UVICORN_RELOAD`              | no       | Set to `true` to enable auto-reload in local dev.                                      | `false`         |
-
-#### Model configuration quick links
-
-- Review the official Google Gemini model catalog to choose Live API compatible IDs: <https://ai.google.dev/gemini-api/docs/models>
-- LiteLLM provider naming and API key expectations (e.g. Anthropic, OpenAI, Azure): <https://docs.litellm.ai/docs/providers>
+| Variable                     | Required | Description                                                                           | Default |
+| ---------------------------- | -------- | ------------------------------------------------------------------------------------- | ------- |
+| `AGENT_ROUTE_PREFIX`         | no       | URL prefix applied to every agent (e.g. `/agents`).                                   | `/agents` |
+| `AGENT_APP_TITLE`            | no       | FastAPI title string.                                                                 | `Agent Gateway` |
+| `AGENT_APP_DESCRIPTION`      | no       | FastAPI description text.                                                             | — |
+| `DEFAULT_MODEL_PROVIDER`     | no       | Fallback model provider (`GOOGLE`, `LITELLM`, …) used by agents without overrides.    | — |
+| `DEFAULT_MODEL`              | no       | Shared fallback model identifier.                                                     | — |
+| `SUPABASE_URL`               | yes      | Base URL of the Supabase project used for authentication.                             | — |
+| `SUPABASE_API_KEY`           | no       | Supabase anon/service key used when calling Supabase Auth APIs.                       | — |
+| `SUPABASE_JWT_SECRET`        | yes      | Supabase JWT secret (required for HS256 tokens).                                      | — |
+| `SUPABASE_JWT_AUDIENCE`      | no       | Comma-separated list of accepted audiences.                                           | — |
+| `SUPABASE_JWT_ISSUER`        | no       | Expected issuer (`iss`) value in Supabase JWTs.                                       | `<SUPABASE_URL>/auth/v1` |
+| `SUPABASE_AUTH_EXCLUDE_PATHS`| no       | Comma-separated routes that bypass auth (e.g. `/healthz`).                            | `/healthz` |
+| `SUPABASE_AUTH_HTTP_TIMEOUT` | no       | Timeout (seconds) used when calling Supabase Auth APIs.                               | `3.0` |
+| `HOST`                       | no       | Host bound by Uvicorn when running `python app.py`.                                   | `0.0.0.0` |
+| `PORT`                       | no       | TCP port bound by Uvicorn.                                                            | `8000` |
+| `UVICORN_RELOAD`             | no       | Set to `true` to enable autoreload in local development.                              | `false` |
+| `LOG_LEVEL`                  | no       | Python logging level (`INFO`, `DEBUG`, …).                                            | `INFO` |
 
 ### GitHub Issues Agent (`agents/github_issues_agent`)
 
 | Variable                                   | Required | Description                                                                                  |
 | ------------------------------------------ | -------- | -------------------------------------------------------------------------------------------- |
 | `GITHUB_ISSUES_AGENT_ROUTE`                | yes      | URL slug for mounting this agent (e.g. `github`).                                            |
-| `GITHUB_ISSUES_AGENT_DISPLAY_NAME`         | yes      | Human-readable name used in logs and agent registry metadata.                                |
+| `GITHUB_ISSUES_AGENT_DISPLAY_NAME`         | yes      | Human-readable name surfaced in logs/registry.                                               |
 | `GITHUB_ISSUES_AGENT_INTERNAL_NAME`        | yes      | Internal identifier passed to the ADK agent.                                                 |
-| `GITHUB_ISSUES_AGENT_MODEL_PROVIDER`       | no       | `GOOGLE` to use Gemini directly; otherwise defaults to LiteLLM bridging for external models. |
-| `GITHUB_ISSUES_AGENT_MODEL`                | yes      | Model identifier (e.g. `gemini-1.5-flash` or `anthropic/claude-3-opus`).                     |
-| `GITHUB_ISSUES_AGENT_CIO_MCP_CONFIG_IDS`   | yes      | Comma or whitespace separated list of Composio MCP configuration identifiers for this agent. |
-| `GITHUB_ISSUES_AGENT_CIO_MCP_TEST_USER_ID` | no       | Fallback MCP user id for unauthenticated/manual testing.                                     |
+| `GITHUB_ISSUES_AGENT_MODEL`                | yes      | Model identifier (e.g. `gemini-1.5-flash`, `anthropic/claude-3-opus`).                       |
+| `GITHUB_ISSUES_AGENT_MODEL_PROVIDER`       | no       | Overrides `DEFAULT_MODEL_PROVIDER`; accepts `GOOGLE` or any LiteLLM bridge provider name.    |
+| `GITHUB_ISSUES_AGENT_CIO_MCP_CONFIG_IDS`   | yes      | Comma or whitespace separated list of Composio MCP config IDs.                              |
+| `GITHUB_ISSUES_AGENT_CIO_MCP_TEST_USER_ID` | no       | Fallback MCP user id used when requests are unauthenticated (local/manual testing).          |
 
-> **Important:** For Gemini models, pass the bare model name (for example `gemini-2.5-pro`) rather than the prefixed `google/gemini-2.5-pro`.
+**Model selection tips**
+- If the provider resolves to `GOOGLE`, pass the bare Gemini model name (e.g.
+  `gemini-2.5-pro`).  
+- For all other providers LiteLLM builds the adapter automatically.
 
-#### Sample `.env` excerpt
-
+**Sample `.env` snippet**
 ```dotenv
 SUPABASE_URL=https://example.supabase.co
 SUPABASE_JWT_SECRET=local_dev_secret
 DEFAULT_MODEL_PROVIDER=LITELLM
 DEFAULT_MODEL=anthropic/claude-sonnet-4-5-20250929
+COMPOSIO_API_KEY=sk-composio-...
 GOOGLE_GENAI_USE_VERTEXAI=false
 GOOGLE_API_KEY=ya29...
 ANTHROPIC_API_KEY=sk-ant-...
-COMPOSIO_API_KEY=sk-...
 GITHUB_ISSUES_AGENT_ROUTE=github
 GITHUB_ISSUES_AGENT_DISPLAY_NAME="GitHub Issues Copilot"
 GITHUB_ISSUES_AGENT_INTERNAL_NAME=github_issues_agent
-# Optional overrides if the GitHub Issues agent should deviate from shared defaults
-# GITHUB_ISSUES_AGENT_MODEL_PROVIDER=LITELLM
-# GITHUB_ISSUES_AGENT_MODEL=anthropic/claude-sonnet-4-5-20250929
 GITHUB_ISSUES_AGENT_CIO_MCP_CONFIG_IDS=config-primary, config-backup
 ```
 
----
+## Running the Gateway
+- **Start the API**: `python app.py`
+- **Health check**: `curl http://localhost:8000/healthz`
+- **Agent base path**: inspect `app.state.agent_registry` or browse the OpenAPI
+  docs to discover available routes. Example entry:
+  ```python
+  [
+      {"slug": "github", "display_name": "GitHub Issues Copilot", "path": "/agents/github"},
+  ]
+  ```
+- **ADK playground**: for local experimentation without Supabase auth, run
+  `cd agents && adk web`. This bypasses gateway authentication and should not be
+  exposed publicly.
 
-## Adding or Extending Agents
-
-1. Create a directory under `agents/` (e.g. `agents/support_bot`).
-2. Implement `agent.py` with a top-level `register_agent(app: FastAPI, base_path: str)` function.
-3. Export and configure any required environment variables.
-4. Restart the service; `shared.agent_loader.discover_agents` will mount the new agent automatically.
-
-Agents can opt into Composio MCP tooling by instantiating `ComposioMCPIntegration`
-with their own settings and wiring the provided callbacks into the ADK agent.
-
-> **Model wiring flexibility:** Environment variables offer a convenient way to keep model
-> selection outside of source control, but they are optional. You can hardcode a model
-> string or instantiate LiteLLM wrappers directly inside `agent.py` if that better suits
-> your deployment. Pick whichever approach keeps configuration clear and repeatable.
-
----
+## Authentication Flow
+- Every request (except paths listed in `SUPABASE_AUTH_EXCLUDE_PATHS`) passes
+  through `SupabaseAuthMiddleware`.
+- The middleware validates bearer JWTs using `SUPABASE_JWT_SECRET`, optional
+  audience/issuer constraints, and fetches `/auth/v1/user` to ensure the user is
+  still active.
+- On success, the user payload and claims are stored on `request.state`, and
+  helpers like `shared.auth.get_supabase_user_id()` expose the ID to downstream
+  code.
+- Failures return `401 Unauthorized` with `WWW-Authenticate: Bearer`.
 
 ## Composio MCP Integration
+- `shared.composio_mcp.ComposioMCPIntegration` injects MCP toolsets the first
+  time an invocation runs and removes them when the run completes.
+- Configure the comma/whitespace separated list of MCP config IDs via
+  `*_CIO_MCP_CONFIG_IDS`.
+- When requests are authenticated the Supabase user id is used for MCP sessions.
+  For unauthenticated testing, supply `*_CIO_MCP_TEST_USER_ID`.
+- The canonical prompt guidance for re-establishing connections is available
+  via `ComposioMCPIntegration.connection_instruction`; agents append it to their
+  instruction blocks automatically.
 
-- Configure a single env var (e.g. `GITHUB_ISSUES_AGENT_CIO_MCP_CONFIG_IDS`) with
-  one or more MCP config IDs separated by commas or whitespace.
-- The integration generates a dedicated `McpToolset` per config ID at invocation time
-  and tears them down after completion.
-- Each toolset is tagged with the invoking ADK invocation id to avoid cross-request leaks.
+## Adding New Agents
+1. Create a directory under `agents/` (e.g. `agents/support_bot`).
+2. Implement an `agent.py` with:
+   - Optional module constants (`AGENT_ROUTE`, `AGENT_DISPLAY_NAME`, etc.).
+   - A callable `register_agent(app: FastAPI, base_path: str)` that mounts
+     routes using `add_adk_fastapi_endpoint` or bespoke FastAPI routers.
+3. Declare any required environment variables (and provide an `.env.example`).
+4. Restart the service; `shared.agent_loader.discover_agents` picks up the new
+   module automatically. Slugs are sanitized (lowercase, hyphenated) and must be
+   unique.
 
----
-
-## Operational Tips
-
-- **Health check**: `curl http://localhost:8000/healthz`
-- **Enable verbose logging**: set `LOG_LEVEL=DEBUG`.
-- **Auth failures**: verify Supabase credentials, ensure your bearer token is valid, and confirm the Supabase user exists.
+## Operational Notes
+- **Logging**: Set `LOG_LEVEL=DEBUG` for verbose gateway and agent logs.
 - **Reload during development**: run `UVICORN_RELOAD=true python app.py`.
+- **Troubleshooting auth**: confirm `SUPABASE_URL`, `SUPABASE_JWT_SECRET`, and
+  bearer tokens; check Supabase user existence if `/user` returns `404`.
+- **Structured tool responses**: `shared.tool_response_utils` provides helpers
+  to normalize MCP responses into JSON, ensuring downstream clients receive
+  predictable payloads.
 
-Agent registry metadata (`app.state.agent_registry`) is useful for introspecting
-mounted agents at runtime. Use it to surface available slugs or build discovery endpoints.
+## Useful References
+- Google Gemini model catalog: <https://ai.google.dev/gemini-api/docs/models>
+- LiteLLM provider matrix: <https://docs.litellm.ai/docs/providers>
+- Supabase Auth docs: <https://supabase.com/docs/guides/auth>
+- Composio MCP docs: <https://docs.composio.dev/>
