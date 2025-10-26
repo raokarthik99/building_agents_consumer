@@ -52,4 +52,4 @@ def resolve_adk_model(
     )
     if provider == google_provider:
         return model_identifier
-    return LiteLlm(model=model_identifier)
+    return LiteLlm(model=model_identifier, max_tokens=64000)

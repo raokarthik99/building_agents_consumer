@@ -15,6 +15,7 @@ export const dynamic = "force-dynamic";
 const serviceAdapter = new ExperimentalEmptyAdapter();
 const agentPaths = {
   "github-issues": "/agents/github-issues",
+  "event-organizer": "/agents/event-organizer",
 } as const;
 
 // 3. Build a Next.js API route that handles the CopilotKit runtime requests.

@@ -30,7 +30,7 @@ export default async function RootLayout({
           <AppHeader user={user} />
           <CopilotKit
             runtimeUrl="/api/copilotkit"
-            agent="github-issues"
+            agent="event-organizer"
             headers={copilotHeaders}
             properties={copilotProperties}
             publicLicenseKey={process.env.COPILOTKIT_PUBLIC_LICENSE_KEY}
