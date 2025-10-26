@@ -1,151 +1,294 @@
-# Agent Chat Workspace
+# 🤖 Agent Chat Workspace
 
-Agent Chat Workspace is a Next.js 15 application that pairs Supabase Auth, CopilotKit, and Composio to deliver a secure, production-ready chat experience for ADK agents. The UI authenticates end users with Google OAuth, proxies requests to a remote CopilotKit Agent Dev Kit (ADK) runtime, and optionally lets users connect third-party accounts through Composio.
+A modern, production-ready chat interface for AI agents built with Next.js 15, CopilotKit, and Supabase. This application provides a secure, scalable foundation for deploying AI agents with multi-agent support, third-party integrations, and enterprise-grade authentication.
 
----
+## ✨ What Makes This Special
 
-## Key Features
-- **Secure sign-in** – Supabase OAuth (Google) with end-to-end session validation, middleware-protected routes, and a polished onboarding flow.
-- **CopilotKit chat surface** – Opinionated chat UI wired to a remote ADK agent (`github-issues` by default) with clear tool-call status and suggestions.
-- **Tool call inspector** – Rich status cards and payload viewers for agent tool calls, including Composio-specific rendering.
-- **Account connections dashboard** – Manage Composio connected accounts (list, refresh, delete, poll for completion) directly inside the app.
-- **TypeScript-first stack** – Next.js App Router, Turbopack dev server, Tailwind-compatible styling, and modern linting.
-
----
-
-## Architecture Overview
-- **App Router (`src/app`)**  
-  - `/signin` presents the Google OAuth entry point.  
-  - `/auth/callback` finalises Supabase sessions.  
-  - `/` renders the CopilotKit chat workspace.  
-  - `/connections` hosts the Composio account manager.
-- **API routes (`src/app/api`)**  
-  - `/api/copilotkit` proxies chat requests to the ADK runtime via `HttpAgent`, forwarding Supabase access tokens.  
-  - `/api/composio/*` wraps Composio REST endpoints for listing, refreshing, deleting, and waiting on connected accounts.
-- **Middleware (`src/middleware.ts`)** guards every route, requiring an authenticated Supabase session (or Bearer token for APIs) and redirecting guests to `/signin`.
-- **Supabase utilities (`src/lib/supabase`)** centralise server/client instantiation and token validation.
-- **Composio helpers (`src/lib/composio`)** encapsulate popup auth flows, status formatting, and polling logic.
+- 🚀 **Multi-Agent Support** - Switch between different AI agents (Event Organizer, GitHub Issues Assistant, and more)
+- 🔐 **Enterprise Authentication** - Secure Google OAuth with Supabase, complete with session management
+- 🛠️ **Rich Tool Integration** - Connect to external services via Composio with visual tool call monitoring
+- 📱 **Modern UI/UX** - Beautiful, responsive interface with real-time status updates
+- 🔧 **Developer Friendly** - TypeScript-first, hot reloading, and comprehensive error handling
+- 🌐 **Production Ready** - Built for scale with proper error boundaries and loading states
 
 ---
 
-## Prerequisites
-- Node.js **18.18+** (development tested with `v24.4.0`, see `.nvmrc`).
-- npm **9+**.
-- A **Supabase** project with Google OAuth enabled.
-- A running **CopilotKit ADK runtime** exposing an agent endpoint (defaults to `http://localhost:8000/agents/github-issues`).
-- (Optional) A **Composio** account and API key if you plan to manage third-party connections.
+## 🏗️ Architecture Overview
 
----
+### Frontend Structure
 
-## Getting Started
-1. **Install dependencies**
-   ```bash
-   npm install
-   ```
-2. **Create your environment file**
-   ```bash
-   cp .env.local.example .env.local
-   ```
-3. **Populate environment variables** (see the table below).
-4. **Start the dev server**
-   ```bash
-   npm run dev
-   ```
-5. Ensure your CopilotKit ADK runtime is reachable, then visit [http://localhost:3000](http://localhost:3000) and sign in with Google.
-
----
-
-## Environment Variables
-| Variable | Required | Description | Default / Example |
-| --- | --- | --- | --- |
-| `NEXT_PUBLIC_SUPABASE_URL` | ✔️ | Supabase project URL (copy from dashboard). | `https://<project-ref>.supabase.co` |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | ✔️ | Supabase public anon key used by the client. | `supabaseAnonKey` |
-| `COPILOTKIT_RUNTIME_ORIGIN` | ✔️ | Base origin of the ADK runtime. The app calls `${origin}/agents/github-issues` by default. | `http://localhost:8000` |
-| `COPILOTKIT_TELEMETRY_DISABLED` | Optional | Disable CopilotKit telemetry if set to a truthy value. | `true` in `.env.local.example` |
-| `COMPOSIO_API_KEY` | Optional (required for connections UI) | Server-side API key for Composio operations. | `your-api-key` |
-| `DO_NOT_TRACK` | Optional | Opt out of analytics libraries. | `1` |
-| `HOST` | Optional | Host interface for Next.js dev server. | `0.0.0.0` |
-| `PORT` | Optional | Port for Next.js dev server. | `3000` |
-
-Restart the dev server whenever you update `.env.local`.
-
----
-
-## Supabase OAuth Configuration
-1. In the Supabase dashboard, enable **Google** under **Authentication → Providers**.
-2. Set the authorised redirect URI to `http://localhost:3000/auth/callback` (add production URLs later).
-3. Copy the **Project URL** and **anon public key** into `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY`.
-4. When deploying, configure the same values in your hosting provider (Vercel, Netlify, etc.) and update the OAuth redirect to match the deployed domain.
-
-The middleware (`src/middleware.ts`) validates every request. Authenticated sessions are checked server-side with `getValidatedUserAndToken`, ensuring the CopilotKit proxy only forwards requests for trusted users.
-
----
-
-## Connecting to the ADK Runtime
-- The proxy at `src/app/api/copilotkit/route.ts` builds an `HttpAgent` using `COPILOTKIT_RUNTIME_ORIGIN` and forwards Supabase access tokens as Bearer credentials to the runtime.
-- Change the default agent path by editing `agentPaths` in the same file or by setting `COPILOTKIT_RUNTIME_ORIGIN` to target a different deployment.
-- If your runtime requires extra headers or authentication strategies, update the `HttpAgent` configuration accordingly.
-
----
-
-## Composio Integrations
-- Supply `COMPOSIO_API_KEY` to unlock the **Connections** page (`/connections`), which lets users list, refresh, delete, and monitor Composio connected accounts.
-- The UI coordinates popup-based authorisation through `openAuthPopup`/`closeAuthPopup` helpers and polls `/api/composio/wait-for-connection` until the new account is active.
-- API routes wrap common Composio actions (`list`, `get`, `refresh`, `delete`) and normalise error responses so the UI can surface friendly messaging.
-- Remote toolkit logos are served through `next.config.ts`, which already whitelists `logos.composio.dev`.
-
----
-
-## Project Structure
 ```
-.
-├─ public/                      # Static assets
-├─ src/
-│  ├─ app/
-│  │  ├─ api/                   # CopilotKit + Composio API routes
-│  │  ├─ auth/                  # OAuth callback handling
-│  │  ├─ connections/           # Composio management page
-│  │  ├─ signin/                # Google sign-in entry point
-│  │  ├─ globals.css            # App-level styles
-│  │  └─ layout.tsx             # Root layout & metadata
-│  ├─ components/               # Reusable UI (chat, header, buttons, tool renderers)
-│  ├─ lib/                      # Supabase + Composio helpers and utilities
-│  └─ middleware.ts             # Auth + routing guard
-├─ next.config.ts               # Next.js configuration (remote images)
-├─ package.json                 # Scripts and dependencies
-└─ .env.local.example           # Environment variable template
+src/
+├── app/                          # Next.js App Router
+│   ├── page.tsx                  # Main chat interface
+│   ├── layout.tsx                # Root layout with CopilotKit provider
+│   ├── signin/page.tsx           # Google OAuth entry point
+│   ├── connections/page.tsx      # Composio account management
+│   └── api/                      # API routes
+│       ├── copilotkit/route.ts   # CopilotKit runtime proxy
+│       └── composio/             # Composio integration endpoints
+├── components/                   # Reusable UI components
+│   ├── ChatClient.tsx            # Main chat interface
+│   ├── AppHeader.tsx             # Navigation and user menu
+│   ├── ManageConnectionsView.tsx # Account management UI
+│   └── ToolCallDetailsRenderer.tsx # Tool execution monitoring
+└── lib/                          # Utilities and configurations
+    ├── agents.ts                 # Agent configuration and management
+    ├── supabase/                 # Authentication utilities
+    └── composio/                 # Third-party integration helpers
 ```
 
----
+### Key Components
 
-## Available npm Scripts
-- `npm run dev` – Start Next.js with Turbopack.
-- `npm run build` – Build the production bundle.
-- `npm run start` – Serve the production build (ensure env vars are set).
-- `npm run lint` – Run ESLint using the Next.js config.
-
----
-
-## Deployment Notes
-- Provision the same environment variables in your hosting environment (Vercel, Railway, etc.).
-- Expose the CopilotKit runtime over HTTPS and update `COPILOTKIT_RUNTIME_ORIGIN` accordingly.
-- Configure Supabase redirect URLs for every deployment domain (staging and production).
-- If you rely on Composio, store `COMPOSIO_API_KEY` in your hosting provider’s secret manager.
+- **🎯 Multi-Agent System** - Configurable agents with different capabilities and personalities
+- **🔐 Authentication Layer** - Supabase-powered OAuth with session management
+- **🔄 Real-time Chat** - CopilotKit-powered chat interface with tool call monitoring
+- **🛠️ Integration Hub** - Composio-powered third-party service connections
+- **📱 Responsive Design** - Mobile-first UI with desktop enhancements
 
 ---
 
-## Troubleshooting
-- **401 Unauthorized when chatting:** Ensure the Supabase session is valid and that the ADK runtime trusts the forwarded Bearer token. Restart your runtime after updating credentials.
-- **Google sign-in loops back to `/signin`:** Double-check redirect URLs in both Supabase and Google Cloud Console; clear cookies if you recently rotated credentials.
-- **Composio list shows a server error:** Verify `COMPOSIO_API_KEY` is set. The API responds with `MISSING_API_KEY` when it’s absent.
-- **Tool call stalls at “Running”:** Inspect console logs on the ADK runtime; the UI polls for results but will keep the status open until the runtime responds.
-- **Missing integration logos:** Add the required domain to `images.remotePatterns` in `next.config.ts` and redeploy.
+## 🚀 Quick Start
+
+### Prerequisites
+
+- **Node.js 18.18+** (tested with v24.4.0)
+- **npm 9+** or **yarn**
+- **Supabase project** with Google OAuth enabled
+- **CopilotKit ADK runtime** running locally or remotely
+- **Composio account** (optional, for third-party integrations)
+
+### 1. Clone and Install
+
+```bash
+git clone <your-repo-url>
+cd copilotkit-ui-adk-agent-standalone
+npm install
+```
+
+### 2. Environment Setup
+
+```bash
+cp .env.local.example .env.local
+# Edit .env.local with your configuration
+```
+
+### 3. Start Development
+
+```bash
+npm run dev
+```
+
+Visit [http://localhost:3000](http://localhost:3000) and sign in with Google!
 
 ---
 
-## Additional Resources
-- [CopilotKit Documentation](https://docs.copilotkit.ai/)
-- [Supabase Auth with Next.js](https://supabase.com/docs/guides/auth/auth-helpers/nextjs)
-- [Composio API Reference](https://docs.composio.dev/)
+## 🤖 Agent Configuration
 
-Happy building!
+This application supports multiple AI agents, each with unique capabilities and personalities. Agents are configured in `src/lib/agents.ts`:
+
+### Available Agents
+
+| Agent                       | Description                   | Icon | Use Case                                        |
+| --------------------------- | ----------------------------- | ---- | ----------------------------------------------- |
+| **Event Organizer**         | Helps plan and manage events  | 🎉   | Event planning, scheduling, coordination        |
+| **GitHub Issues Assistant** | Manages GitHub issues and PRs | 🐙   | Code review, issue tracking, project management |
+
+### Adding New Agents
+
+1. **Define the agent** in `src/lib/agents.ts`:
+
+```typescript
+export const AGENT_CONFIGS: Record<string, AgentConfig> = {
+  "your-agent": {
+    id: "your-agent",
+    name: "Your Agent Name",
+    description: "What your agent does",
+    initialMessage: "Hello! I'm your assistant...",
+    icon: "🚀",
+  },
+};
+```
+
+2. **Add the runtime path** in `src/app/api/copilotkit/route.ts`:
+
+```typescript
+const agentPaths = {
+  "your-agent": "/agents/your-agent",
+  // ... existing agents
+} as const;
+```
+
+3. **Update the default agent** in `src/app/page.tsx`:
+
+```typescript
+const agentId = "your-agent"; // Change this
+```
+
+### Agent Runtime Requirements
+
+Each agent must be available at: `{COPILOTKIT_RUNTIME_ORIGIN}/agents/{agent-id}`
+
+---
+
+## ⚙️ Configuration
+
+### Environment Variables
+
+Create a `.env.local` file in the root directory with the following variables:
+
+| Variable                        | Required | Description                         | Example                                   |
+| ------------------------------- | -------- | ----------------------------------- | ----------------------------------------- |
+| `NEXT_PUBLIC_SUPABASE_URL`      | ✅       | Your Supabase project URL           | `https://xyz.supabase.co`                 |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | ✅       | Supabase anonymous key              | `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...` |
+| `COPILOTKIT_RUNTIME_ORIGIN`     | ✅       | ADK runtime base URL                | `http://localhost:8000`                   |
+| `COPILOTKIT_PUBLIC_LICENSE_KEY` | ✅       | CopilotKit license key              | `your-license-key`                        |
+| `COMPOSIO_API_KEY`              | ⚠️       | Composio API key (for integrations) | `your-composio-key`                       |
+| `COPILOTKIT_TELEMETRY_DISABLED` | ❌       | Disable telemetry                   | `true`                                    |
+| `DO_NOT_TRACK`                  | ❌       | Opt out of analytics                | `1`                                       |
+
+### Supabase Setup
+
+1. **Create a Supabase project** at [supabase.com](https://supabase.com)
+2. **Enable Google OAuth**:
+   - Go to Authentication → Providers
+   - Enable Google provider
+   - Add redirect URL: `http://localhost:3000/auth/callback`
+3. **Get your credentials**:
+   - Copy Project URL → `NEXT_PUBLIC_SUPABASE_URL`
+   - Copy anon public key → `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+
+### CopilotKit Runtime
+
+Ensure your ADK runtime is running and accessible at the URL specified in `COPILOTKIT_RUNTIME_ORIGIN`. The application will connect to agents at:
+
+- `{RUNTIME_ORIGIN}/agents/event-organizer`
+- `{RUNTIME_ORIGIN}/agents/github-issues`
+
+---
+
+## 🛠️ Features Deep Dive
+
+### Multi-Agent Chat Interface
+
+- **Real-time messaging** with CopilotKit-powered chat UI
+- **Tool call monitoring** with visual status indicators
+- **Agent switching** with persistent conversation history
+- **Responsive design** that works on all devices
+
+### Account Management
+
+- **Google OAuth** with secure session handling
+- **Profile management** with avatar display
+- **Session persistence** across browser refreshes
+- **Automatic logout** on token expiration
+
+### Third-Party Integrations
+
+- **Composio-powered** service connections
+- **Visual connection status** with real-time updates
+- **Account refresh** and management capabilities
+- **Popup-based OAuth** flows for new connections
+
+---
+
+## 📁 Project Structure
+
+```
+copilotkit-ui-adk-agent-standalone/
+├── public/                     # Static assets (icons, images)
+├── src/
+│   ├── app/                    # Next.js App Router
+│   │   ├── api/                # API endpoints
+│   │   │   ├── copilotkit/     # CopilotKit runtime proxy
+│   │   │   └── composio/       # Composio integration APIs
+│   │   ├── auth/               # OAuth callback handling
+│   │   ├── connections/        # Account management page
+│   │   ├── signin/             # Google OAuth entry point
+│   │   ├── globals.css         # Global styles
+│   │   ├── layout.tsx          # Root layout with providers
+│   │   └── page.tsx            # Main chat interface
+│   ├── components/             # Reusable UI components
+│   │   ├── ChatClient.tsx      # Main chat interface
+│   │   ├── AppHeader.tsx       # Navigation and user menu
+│   │   ├── ManageConnectionsView.tsx # Account management
+│   │   └── ToolCallDetailsRenderer.tsx # Tool monitoring
+│   ├── lib/                    # Utilities and configurations
+│   │   ├── agents.ts           # Agent configuration
+│   │   ├── supabase/           # Authentication utilities
+│   │   └── composio/           # Integration helpers
+│   └── middleware.ts           # Authentication middleware
+├── next.config.ts              # Next.js configuration
+├── package.json                # Dependencies and scripts
+└── .env.local.example          # Environment template
+```
+
+## 🚀 Available Scripts
+
+| Command         | Description                             |
+| --------------- | --------------------------------------- |
+| `npm run dev`   | Start development server with Turbopack |
+| `npm run build` | Build production bundle                 |
+| `npm run start` | Serve production build                  |
+| `npm run lint`  | Run ESLint checks                       |
+
+---
+
+## 🚀 Deployment
+
+### Environment Setup
+
+1. **Set all environment variables** in your hosting platform
+2. **Update Supabase redirect URLs** for your production domain
+3. **Ensure HTTPS** for both your app and CopilotKit runtime
+4. **Store secrets securely** using your platform's secret management
+
+### Platform-Specific Notes
+
+- **Vercel**: Add environment variables in project settings
+- **Railway**: Use the dashboard to configure environment variables
+- **Netlify**: Set environment variables in site settings
+
+### Production Checklist
+
+- [ ] All environment variables configured
+- [ ] Supabase OAuth redirects updated
+- [ ] CopilotKit runtime accessible via HTTPS
+- [ ] Composio API key secured (if using integrations)
+- [ ] Domain whitelisted in Supabase
+
+---
+
+## 🔧 Troubleshooting
+
+### Common Issues
+
+| Problem                | Solution                                                |
+| ---------------------- | ------------------------------------------------------- |
+| **401 Unauthorized**   | Check Supabase session validity and runtime token trust |
+| **Google OAuth loops** | Verify redirect URLs in Supabase and Google Console     |
+| **Composio errors**    | Ensure `COMPOSIO_API_KEY` is set correctly              |
+| **Tool calls stuck**   | Check ADK runtime logs and connectivity                 |
+| **Missing logos**      | Add domains to `next.config.ts` remote patterns         |
+
+### Debug Steps
+
+1. **Check browser console** for client-side errors
+2. **Verify environment variables** are loaded correctly
+3. **Test Supabase connection** in the dashboard
+4. **Validate CopilotKit runtime** is responding
+5. **Check network tab** for failed API calls
+
+### Getting Help
+
+- 📚 [CopilotKit Docs](https://docs.copilotkit.ai/)
+- 🔐 [Supabase Auth Guide](https://supabase.com/docs/guides/auth/auth-helpers/nextjs)
+- 🛠️ [Composio API Reference](https://docs.composio.dev/)
+
+---
+
+## 🎉 You're All Set!
+
+Your Agent Chat Workspace is ready to go! Start chatting with your AI agents and explore the powerful integrations available.
+
+**Happy building!** 🚀
