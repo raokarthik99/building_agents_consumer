@@ -200,42 +200,22 @@ python app.py
 | `EVENT_ORGANIZER_AGENT_CIO_MCP_CONFIG_IDS`   | **Yes**  | Composio MCP config IDs                   |
 | `EVENT_ORGANIZER_AGENT_CIO_MCP_TEST_USER_ID` | No       | Test user ID for unauthenticated requests |
 
-### 📝 Example Configuration
+### 📝 Configuration Notes
 
-```bash
-# .env file example
-# Core settings
-AGENT_APP_TITLE="My AI Agent Gateway"
-LOG_LEVEL=INFO
-
-# Supabase authentication
-SUPABASE_URL=https://your-project.supabase.co
-SUPABASE_JWT_SECRET=your-jwt-secret-here
-SUPABASE_API_KEY=your-api-key-here
-
-# Model configuration
-DEFAULT_MODEL_PROVIDER=LITELLM
-DEFAULT_MODEL=anthropic/claude-3-5-sonnet-20241022
-
-# GitHub Issues Agent
-GITHUB_ISSUES_AGENT_ROUTE=github
-GITHUB_ISSUES_AGENT_DISPLAY_NAME="GitHub Issues Copilot"
-GITHUB_ISSUES_AGENT_INTERNAL_NAME=github_issues_agent
-GITHUB_ISSUES_AGENT_MODEL=anthropic/claude-3-5-sonnet-20241022
-GITHUB_ISSUES_AGENT_CIO_MCP_CONFIG_IDS=github-config-1,github-config-2
-
-# Event Organizer Agent
-EVENT_ORGANIZER_AGENT_ROUTE=events
-EVENT_ORGANIZER_AGENT_DISPLAY_NAME="Event Planning Assistant"
-EVENT_ORGANIZER_AGENT_INTERNAL_NAME=event_organizer_agent
-EVENT_ORGANIZER_AGENT_MODEL=gemini-1.5-pro
-EVENT_ORGANIZER_AGENT_CIO_MCP_CONFIG_IDS=notion-config,gmail-config,calendar-config
-
-# API Keys
-ANTHROPIC_API_KEY=sk-ant-...
-GOOGLE_API_KEY=ya29...
-COMPOSIO_API_KEY=sk-composio-...
-```
+- Model provider selection:
+  - Set `DEFAULT_MODEL_PROVIDER` to `GOOGLE` to use Gemini directly via ADK, or `LITELLM` to route to other providers (OpenAI, Anthropic, Azure AI, Ollama, etc.).
+- Model naming guidance:
+  - For Gemini, use bare model names like `gemini-2.5-pro` or `gemini-2.5-flash` (see official catalog).
+  - For LiteLLM, use the provider-expected identifier format (e.g., `anthropic/claude-sonnet-4-5-20250929`). Refer to LiteLLM docs for each provider’s naming.
+- Google keys and Vertex AI:
+  - Use `GOOGLE_API_KEY` from Google AI Studio to call Gemini directly. Docs: https://google.github.io/adk-docs/agents/models/#google-ai-studio
+  - `GOOGLE_GENAI_USE_VERTEXAI=false` by default. If you prefer Vertex AI, follow: https://google.github.io/adk-docs/agents/models/#google-cloud-vertex-ai
+- LiteLLM providers and keys:
+  - Provider naming and API key guidance: https://docs.litellm.ai/docs/providers
+- Supabase auth:
+  - Provide `SUPABASE_URL` and `SUPABASE_JWT_SECRET`. Optional fields include `SUPABASE_API_KEY`, `SUPABASE_JWT_AUDIENCE`, and `SUPABASE_JWT_ISSUER` (defaults to `<SUPABASE_URL>/auth/v1`).
+- Tooling:
+  - `COMPOSIO_API_KEY` enables Composio MCP tools. Use per-agent `*_CIO_MCP_CONFIG_IDS` and optional `*_CIO_MCP_TEST_USER_ID` for unauthenticated testing.
 
 ### 🔄 Managing Dependencies
 
