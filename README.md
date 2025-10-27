@@ -1,3 +1,5 @@
+**This repo and all of its READMEs are best viewed together with [this blog post](https://medium.com/@raokarthik99/confessions-of-an-unprincipled-ai-engineer-what-agent-building-tutorials-and-youtubers-dont-ee1a36cb5e69)**
+
 # Building Agents — Consumer
 
 A full‑stack reference for building consumer‑facing AI agents. This repo contains:
