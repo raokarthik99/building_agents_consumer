@@ -2,6 +2,10 @@ import os
 from dataclasses import dataclass
 from typing import Dict, Iterable, Tuple
 
+from dotenv import load_dotenv
+
+load_dotenv()
+
 
 def require_env(var_name: str, *, context: str) -> str:
     """
